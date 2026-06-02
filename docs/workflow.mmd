@@ -1,0 +1,31 @@
+---
+title: Runtime Workflow
+---
+
+sequenceDiagram
+
+    participant User
+    participant Dashboard
+    participant Tracker
+    participant Endpoint
+    participant Logs
+
+    User->>Dashboard: Open Dashboard
+
+    loop Every 3 Seconds
+
+        Tracker->>Endpoint: Scan Local RPC Endpoints
+        Endpoint-->>Tracker: Telemetry Payload
+
+        Tracker->>Logs: Read Session Logs
+        Logs-->>Tracker: Usage Records
+
+        Tracker->>Tracker: Parse Quotas
+        Tracker->>Tracker: Recover Missing Fields
+        Tracker->>Tracker: Calculate Resets
+
+        Tracker-->>Dashboard: Updated State
+
+    end
+
+    Dashboard-->>User: Render Updated Metrics

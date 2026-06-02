@@ -1,0 +1,16 @@
+stateDiagram-v2
+
+    [*] --> Created
+
+    Created --> Starting
+    Starting --> Running
+
+    Running --> Refreshing
+    Refreshing --> Running
+
+    Running --> Exhausted
+    Exhausted --> Resetting
+    Resetting --> Running
+
+    Running --> Stopped
+    Stopped --> [*]

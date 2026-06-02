@@ -1,0 +1,15 @@
+flowchart LR
+
+    A[AI Accounts]
+
+    A --> B[Antigravity Tracker]
+    A --> C[Codex Tracker]
+
+    B --> D[RPC Endpoint Scanner]
+    C --> E[Session Log Parser]
+
+    D --> F[Telemetry Aggregator]
+    E --> F
+
+    F --> G[Dashboard :5000]
+    F --> H[Dashboard :5001]

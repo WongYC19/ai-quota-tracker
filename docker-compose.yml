@@ -1,0 +1,15 @@
+services:
+
+  antigravity:
+    build: .
+    container_name: antigravity-tracker
+    command: python antigravity.py
+    ports:
+      - "5000:5000"
+
+  codex:
+    build: .
+    container_name: codex-tracker
+    command: python codex.py
+    ports:
+      - "5001:5001"

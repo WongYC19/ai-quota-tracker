@@ -1,0 +1,19 @@
+flowchart TD
+
+    A[Push Commit]
+
+    A --> B[Ruff]
+    B --> C[Black]
+    C --> D[Pytest]
+
+    D --> E{Pass?}
+
+    E -->|No| F[Fail]
+
+    E -->|Yes| G[Build Artifacts]
+
+    G --> H[GitHub Release]
+
+    H --> I[Windows Binary]
+    H --> J[macOS Binary]
+    H --> K[Linux Binary]

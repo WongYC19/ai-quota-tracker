@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+    <title>Antigravity Tracker Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        canvasDark: '#090d16',
+                        panelDark: '#111726',
+                        borderDark: '#1e293b'
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #e2e8f0;
+        }
+
+        .neon-accent {
+            text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        }
+
+        .glass-panel {
+            background: rgba(17, 23, 38, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(30, 41, 59, 0.8);
+        }
+
+        .progress-bar-glow {
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        /* Scrollbar styles */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #090d16;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col p-4 md:p-8 overflow-x-hidden">
+    <!-- Header -->
+    <header
+        class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-4 border-b border-borderDark gap-4">
+        <div class="flex items-center space-x-4">
+            <div
+                class="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                <i class="ph ph-planet text-white text-2xl"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold tracking-wide text-white uppercase flex items-center space-x-2">
+                    <span>Antigravity</span>
+                    <span
+                        class="text-[10px] bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/30">Tracker
+                        Dashboard</span>
+                </h1>
+                <p class="text-sm text-slate-500 mt-1">More clarity. More insights. Faster decisions.</p>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-4 text-sm bg-panelDark p-2 rounded-xl border border-borderDark">
+            <div
+                class="flex items-center space-x-2 px-3 py-1.5 bg-black/40 rounded-lg text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
+                <div class="relative flex h-2.5 w-2.5">
+                    <span
+                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </div>
+                <span class="text-xs font-medium">Auto-refresh: <strong id="refresh-indicator">60s</strong></span>
+            </div>
+            <div class="flex items-center space-x-2 text-slate-400 px-2">
+                <i class="ph ph-globe text-lg text-indigo-400"></i>
+                <select id="timezone-select"
+                    class="bg-transparent border-none text-slate-300 text-sm focus:ring-0 cursor-pointer outline-none">
+                    <!-- Populated by JS -->
+                </select>
+            </div>
+            <div class="text-slate-300 font-mono text-sm px-2 border-l border-slate-700"
+                id="clock">Loading...</div>
+            <button class="text-slate-400 hover:text-white transition px-2">
+                <i class="ph ph-gear text-xl"></i>
+            </button>
+            <button onclick="launchProfile()"
+                class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-lg transition text-sm flex items-center space-x-2 shadow-lg shadow-indigo-600/20 ml-2">
+                <i class="ph ph-plus-circle text-lg"></i> <span>New Profile</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 w-full mx-auto space-y-6">
+        <!-- KPI Cards -->
+        <section class="grid grid-cols-1 md:grid-cols-4 gap-5"
+            id="kpi-cards">
+            <!-- Rendered by JS -->
+        </section>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Profiles Section -->
+            <section class="lg:col-span-2 space-y-4"
+                id="profiles-container">
+                <!-- Rendered by JS -->
+            </section>
+
+            <!-- Side Panels -->
+            <section class="space-y-6">
+                <!-- 24h Trend Chart -->
+                <div class="glass-panel rounded-xl p-5">
+                    <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i
+                            class="ph ph-trend-up mr-2 text-emerald-400 text-lg"></i> Capacity Usage (24h)</h3>
+                    <div class="h-48">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Upcoming Resets -->
+                <div class="glass-panel rounded-xl p-5">
+                    <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i
+                            class="ph ph-clock-countdown mr-2 text-indigo-400 text-lg"></i> Upcoming Resets</h3>
+                    <div id="upcoming-resets"
+                        class="space-y-3 max-h-64 overflow-y-auto pr-2">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Alerts Panel -->
+                <div class="glass-panel rounded-xl p-5 border-rose-500/20">
+                    <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i
+                            class="ph ph-bell-ringing mr-2 text-rose-400 text-lg"></i> System Alerts</h3>
+                    <div id="alerts-container"
+                        class="space-y-3">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        let openProfiles = new Set(["user_one_domain_com_14208"]);
+
+        // Use user's local timezone as default if possible, fallback to KL
+        let detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kuala_Lumpur';
+        let userTimezone = detectedTz;
+
+        let refreshInterval = 60000; // 60 seconds
+        let timerId = null;
+
+        function initTimezones() {
+            const select = document.getElementById('timezone-select');
+            const commonTimezones = ['Asia/Kuala_Lumpur', 'UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo', 'Australia/Sydney', 'America/Los_Angeles'];
+
+            if (!commonTimezones.includes(detectedTz)) commonTimezones.unshift(detectedTz);
+
+            select.innerHTML = commonTimezones.map(tz => {
+                let label = tz;
+                if (tz === 'Asia/Kuala_Lumpur') label = 'UTC+8 (KL)';
+                else if (tz === detectedTz) label = tz + ' (Local)';
+                return `<option value="${tz}" ${tz === userTimezone ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+
+            select.addEventListener('change', (e) => {
+                userTimezone = e.target.value;
+                updateClock();
+                poll(); // Re-render to update times
+            });
+        }
+
+        function updateClock() {
+            try {
+                const options = { timeZone: userTimezone, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+                document.getElementById('clock').innerText = new Intl.DateTimeFormat('en-US', options).format(new Date());
+            } catch (e) {
+                document.getElementById('clock').innerText = new Date().toLocaleString();
+            }
+        }
+        setInterval(updateClock, 1000);
+
+        async function launchProfile() {
+            await fetch('/api/launch', { method: 'POST' });
+            poll();
+        }
+
+        async function poll() {
+            try {
+                const res = await fetch('/api/data');
+                const data = await res.json();
+                render(data);
+            } catch (e) {
+                console.error("Polling failed", e);
+            }
+        }
+
+        function toggle(id) {
+            if (openProfiles.has(id)) openProfiles.delete(id);
+            else openProfiles.add(id);
+            poll(); // Re-render
+        }
+
+        // Helper to format date in chosen timezone
+        function formatResetTime(isoStr) {
+            if (!isoStr || isoStr === "N/A" || isoStr === "") return "N/A";
+            try {
+                const date = new Date(isoStr);
+                const options = { timeZone: userTimezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
+                return new Intl.DateTimeFormat('en-CA', options).format(date).replace(',', '');
+            } catch (e) {
+                return isoStr;
+            }
+        }
+
+        function render(data) {
+            let totalProfiles = data.length;
+            let totalModels = 0;
+            let exhausted = 0;
+            let totalCapacitySum = 0;
+            let allModels = [];
+
+            const profilesHtml = data.map(acc => {
+                let safeId = acc.email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + acc.pid;
+                let isOpen = openProfiles.has(safeId);
+                let chevRot = isOpen ? 'rotate-90' : '';
+                let bodyHide = isOpen ? 'hidden' : ''; // By default shown if in set, else hidden. Wait, the logic: if bodyHide='hidden', it hides.
+                bodyHide = isOpen ? '' : 'hidden';
+
+                let barColor = acc.avg_used > 80 ? 'bg-rose-500' : (acc.avg_used > 50 ? 'bg-amber-500' : 'bg-emerald-500');
+                totalCapacitySum += acc.avg_used;
+
+                let rows = acc.models.map(m => {
+                    totalModels++;
+                    if (m.used_pct_raw >= 100) exhausted++;
+
+                    if (m.exact_reset_iso && m.exact_reset_iso !== "N/A") {
+                        allModels.push(m);
+                    }
+
+                    // Format reset time using chosen TZ
+                    let displayReset = m.exact_reset_iso ? formatResetTime(m.exact_reset_iso) : m.exact_reset;
+
+                    let icon = 'ph-robot';
+                    if (m.name.toLowerCase().includes('claude')) icon = 'ph-brain';
+                    else if (m.name.toLowerCase().includes('gemini')) icon = 'ph-sparkle';
+                    else if (m.name.toLowerCase().includes('gpt')) icon = 'ph-lightning';
+
+                    return `
+                    <tr class="border-t border-borderDark/50 text-sm hover:bg-slate-800/30 transition">
+                        <td class="px-5 py-4 font-medium flex items-center space-x-3 text-slate-200">
+                            <i class="ph ${icon} text-lg text-indigo-400"></i>
+                            <span>${m.name}</span>
+                        </td>
+                        <td class="px-5 py-4">
+                            <div class="flex items-center space-x-3">
+                                <span class="font-mono text-slate-300 w-12">${m.usage}</span>
+                                <div class="w-24 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div class="${m.used_pct_raw > 80 ? 'bg-rose-500' : (m.used_pct_raw > 50 ? 'bg-amber-500' : 'bg-emerald-500')} h-full progress-bar-glow" style="width: ${Math.min(m.used_pct_raw, 100)}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-5 py-4 font-mono ${m.style}">${m.pct}</td>
+                        <td class="px-5 py-4 font-mono text-slate-400 text-xs">${displayReset}</td>
+                        <td class="px-5 py-4 font-mono text-slate-300 text-xs flex items-center space-x-1">
+                            <i class="ph ph-timer"></i> <span>${m.reset_left}</span>
+                        </td>
+                        <td class="px-5 py-4 text-right">
+                            <span class="px-2.5 py-1 text-[10px] font-bold rounded uppercase tracking-wider ${m.status_style}">${m.status_label}</span>
+                        </td>
+                    </tr>
+                `}).join('');
+
+                return `
+                <div class="glass-panel rounded-xl overflow-hidden shadow-lg transition duration-200 mb-4">
+                    <div class="px-5 py-4 flex justify-between items-center cursor-pointer select-none hover:bg-white/5 transition" onclick="toggle('${safeId}')">
+                        <div class="flex items-center space-x-4">
+                            <i class="ph ph-caret-right text-slate-500 transform transition-transform duration-200 ${chevRot}"></i>
+                            <div class="flex flex-col">
+                                <div class="flex items-center space-x-3">
+                                    <span class="font-bold text-sm text-white">${acc.email}</span>
+                                    <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-[0_0_5px_rgba(99,102,241,0.2)]">${acc.plan}</span>
+                                    <div class="flex items-center space-x-1 text-emerald-400 text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                        <span>PID: ${acc.pid} • Online</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-4">
+                                <span class="text-xs font-mono text-slate-400">${acc.avg_used}% Capacity Used</span>
+                                <div class="w-24 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                    <div class="${barColor} h-full shadow-[0_0_8px_currentColor]" style="width: ${acc.avg_used}%"></div>
+                                </div>
+                            </div>
+                            <button class="text-[10px] bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 px-3 py-1.5 rounded border border-indigo-500/30 transition uppercase font-bold tracking-wider">Details</button>
+                        </div>
+                    </div>
+                    <div id="${safeId}" class="${bodyHide} bg-panelDark/70 border-t border-borderDark/50">
+                        <table class="w-full text-left">
+                            <thead>
+                                <tr class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 bg-black/20">
+                                    <th class="px-5 py-3 rounded-tl-lg">Model</th>
+                                    <th class="px-5 py-3">Usage</th>
+                                    <th class="px-5 py-3">Remaining</th>
+                                    <th class="px-5 py-3">Reset Time</th>
+                                    <th class="px-5 py-3">Time Left</th>
+                                    <th class="px-5 py-3 text-right">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows}</tbody>
+                        </table>
+                    </div>
+                </div>`;
+            }).join('');
+
+            document.getElementById('profiles-container').innerHTML = profilesHtml;
+
+            let avgCapacity = totalProfiles > 0 ? Math.round(totalCapacitySum / totalProfiles) : 0;
+            let capColor = avgCapacity > 80 ? 'text-rose-500' : (avgCapacity > 50 ? 'text-amber-500' : 'text-emerald-500');
+
+            // Render KPIs
+            document.getElementById('kpi-cards').innerHTML = `
+                <div class="glass-panel rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><i class="ph ph-users text-6xl text-blue-500"></i></div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2 flex items-center"><i class="ph ph-users mr-2"></i> Active Profiles</p>
+                    <div class="flex items-end space-x-3">
+                        <h3 class="text-4xl font-bold text-white tracking-tight">${totalProfiles}</h3>
+                        <span class="text-[10px] text-emerald-400 flex items-center mb-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-up-right mr-0.5"></i> 0 from last refresh</span>
+                    </div>
+                </div>
+                <div class="glass-panel rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><i class="ph ph-cube text-6xl text-emerald-500"></i></div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center"><i class="ph ph-cube mr-2"></i> Monitored Models</p>
+                    <div class="flex items-end space-x-3">
+                        <h3 class="text-4xl font-bold text-white tracking-tight">${totalModels}</h3>
+                        <span class="text-[10px] text-emerald-400 flex items-center mb-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-up-right mr-0.5"></i> 0 from last refresh</span>
+                    </div>
+                </div>
+                <div class="glass-panel rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group border ${exhausted > 0 ? 'border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]' : 'border-transparent'}">
+                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><i class="ph ph-warning-circle text-6xl text-rose-500"></i></div>
+                    <p class="text-xs font-bold uppercase tracking-wider text-rose-400 mb-2 flex items-center"><i class="ph ph-warning-circle mr-2"></i> Exhausted Quotas</p>
+                    <div class="flex items-end space-x-3">
+                        <h3 class="text-4xl font-bold text-white tracking-tight">${exhausted}</h3>
+                        <span class="text-[10px] ${exhausted > 0 ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400 bg-slate-800'} flex items-center mb-1.5 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-right mr-0.5"></i> 0 from last refresh</span>
+                    </div>
+                </div>
+                <div class="glass-panel rounded-xl p-5 flex justify-between items-center relative overflow-hidden">
+                    <div class="z-10">
+                        <p class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2 flex items-center"><i class="ph ph-gauge mr-2"></i> Total Capacity</p>
+                        <div class="flex items-end space-x-2">
+                            <h3 class="text-4xl font-bold text-white tracking-tight">${avgCapacity}%</h3>
+                            <span class="text-[10px] text-rose-400 flex items-center mb-1.5 bg-rose-500/10 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-up-right mr-0.5"></i> +5%</span>
+                        </div>
+                    </div>
+                    <div class="relative w-20 h-20 z-10">
+                        <svg class="w-full h-full transform -rotate-90 drop-shadow-[0_0_8px_currentColor] ${capColor}" viewBox="0 0 36 36">
+                            <path class="text-slate-800" stroke-width="4" stroke="currentColor" fill="transparent" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path class="currentColor" stroke-width="4" stroke-dasharray="${avgCapacity}, 100" stroke-linecap="round" stroke="currentColor" fill="transparent" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                    </div>
+                </div>
+            `;
+
+            // Render Upcoming Resets
+            let upcomingHtml = '';
+            if (allModels.length > 0) {
+                allModels.sort((a, b) => {
+                    let parseTime = (str) => {
+                        let match = str.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
+                        if (!match) return 99999;
+                        let h = parseInt(match[1] || 0);
+                        let m = parseInt(match[2] || 0);
+                        return h * 60 + m;
+                    };
+                    return parseTime(a.reset_left) - parseTime(b.reset_left);
+                });
+
+                upcomingHtml = allModels.slice(0, 6).map(m => {
+                    let icon = 'ph-robot';
+                    if (m.name.toLowerCase().includes('claude')) icon = 'ph-brain';
+                    else if (m.name.toLowerCase().includes('gemini')) icon = 'ph-sparkle';
+                    else if (m.name.toLowerCase().includes('gpt')) icon = 'ph-lightning';
+
+                    return `
+                    <div class="flex justify-between items-center text-sm p-3 rounded-lg bg-black/20 border border-white/5 hover:bg-black/40 transition">
+                        <div class="flex items-center space-x-3 text-slate-300">
+                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
+                                <i class="ph ${icon} text-indigo-400"></i>
+                            </div>
+                            <span class="font-medium text-xs">${m.name}</span>
+                        </div>
+                        <span class="text-indigo-400 font-mono text-[10px] bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded shadow-[0_0_5px_rgba(99,102,241,0.2)]">in ${m.reset_left}</span>
+                    </div>
+                `}).join('');
+            } else {
+                upcomingHtml = '<div class="text-slate-500 text-sm text-center py-4 bg-black/20 rounded-lg">No upcoming resets</div>';
+            }
+            document.getElementById('upcoming-resets').innerHTML = upcomingHtml;
+
+            // Render Alerts
+            let alertsHtml = '';
+            if (exhausted > 0) {
+                alertsHtml = `
+                    <div class="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-4 rounded-xl text-sm flex items-start space-x-4 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+                        <div class="bg-rose-500/20 p-2 rounded-lg">
+                            <i class="ph ph-warning-octagon text-2xl"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-base">Quota Exhausted</p>
+                            <p class="text-rose-400/80 text-xs mt-1">${exhausted} model(s) have reached their usage limits and are blocked.</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                alertsHtml = `
+                    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl text-sm flex items-center space-x-4">
+                        <div class="bg-emerald-500/20 p-2 rounded-lg">
+                            <i class="ph ph-check-circle text-2xl"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-base">System Normal</p>
+                            <p class="text-emerald-400/80 text-xs mt-1">All models are within quota limits.</p>
+                        </div>
+                    </div>
+                `;
+            }
+            document.getElementById('alerts-container').innerHTML = alertsHtml;
+        }
+
+        // Initialize chart
+        const ctx = document.getElementById('trendChart').getContext('2d');
+
+        // Gradient for chart line
+        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
+        gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+
+        const trendChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['10 AM', '12 PM', '2 PM', '4 PM', '6 PM', '8 PM', '10 PM', '12 AM', '2 AM', '4 AM', '6 AM', '8 AM', '10 AM'],
+                datasets: [{
+                    label: 'Capacity Used %',
+                    data: [15, 18, 25, 22, 45, 55, 48, 30, 25, 38, 55, 68, 45],
+                    borderColor: '#818cf8',
+                    backgroundColor: gradient,
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#c7d2fe',
+                    pointBorderColor: '#4f46e5',
+                    pointBorderWidth: 2,
+                    pointRadius: 3,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                        titleColor: '#cbd5e1',
+                        bodyColor: '#fff',
+                        borderColor: 'rgba(51, 65, 85, 0.5)',
+                        borderWidth: 1,
+                        padding: 10,
+                        displayColors: false,
+                        callbacks: {
+                            label: function (context) { return context.parsed.y + '% Used'; }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: 'rgba(30, 41, 59, 0.3)', drawBorder: false },
+                        ticks: { color: '#64748b', stepSize: 25, callback: (v) => v + '%', font: { family: 'Inter', size: 10 } }
+                    },
+                    x: {
+                        grid: { display: false, drawBorder: false },
+                        ticks: { color: '#64748b', maxTicksLimit: 6, font: { family: 'Inter', size: 10 } }
+                    }
+                },
+                interaction: { intersect: false, mode: 'index' },
+            }
+        });
+
+        // Initialize and start polling
+        initTimezones();
+        updateClock();
+
+        function startPolling() {
+            if (timerId) clearInterval(timerId);
+            timerId = setInterval(poll, refreshInterval);
+        }
+
+        poll();
+        startPolling();
+    </script>
+</body>
+
+</html>
