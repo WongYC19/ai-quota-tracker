@@ -55,15 +55,15 @@ This project uses `uv` for lightning-fast dependency management.
    ```
 
 2. **Run Antigravity Dashboard (Port 5000)**:
-   You can run it directly via the source file with RTK enabled to save agent tokens:
+   You can run it directly via the source file:
    ```powershell
-   rtk uv run python src/antigravity_orchestrator.py
+   uv run python src/antigravity_orchestrator.py
    ```
-   *(Or use the installed hook: `rtk uv run antigravity-dashboard`)*
+   *(Or use the installed hook: `uv run antigravity-dashboard`)*
 
 3. **Run Codex Orchestrator (Port 5001)**:
-   You can run it directly via the source file with RTK enabled:
+   You can run it directly via the source file:
    ```powershell
-   rtk uv run python src/codex_orchestrator.py
+   uv run python src/codex_orchestrator.py
    ```
-   *(Or use the installed hook: `rtk uv run codex-orchestrator`)*
+   *(Or use the installed hook: `uv run codex-orchestrator`)*
