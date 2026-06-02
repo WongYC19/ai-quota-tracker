@@ -38,4 +38,4 @@ jobs:
 
       - name: Dry run (import test)
         run: |
-          uv run python -c "import src.antigravity_tracker; import src.codex_orchestrator"
+          uv run python -c "import src.antigravity_orchestrator; import src.codex_orchestrator"

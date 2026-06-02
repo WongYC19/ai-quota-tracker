@@ -18,7 +18,7 @@ Homepage = "https://github.com/WongYC19/ai-quota-tracker"
 Repository = "https://github.com/WongYC19/ai-quota-tracker"
 
 [project.scripts]
-antigravity-dashboard = "src.antigravity_tracker:main"
+antigravity-dashboard = "src.antigravity_orchestrator:main"
 codex-orchestrator = "src.codex_orchestrator:main"
 
 [build-system]
