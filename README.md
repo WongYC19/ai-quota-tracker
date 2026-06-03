@@ -4,7 +4,7 @@
 ![Python Version](https://img.shields.io/badge/python-%3E%3D3.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
-A multi-account AI quota and telemetry tracker for Antigravity IDE and OpenAI Codex.
+A multi-provider AI quota and telemetry tracker — a single unified dashboard for Antigravity IDE and future IDE providers.
 
 > [!IMPORTANT]
 > **Why does this exist?**
@@ -12,38 +12,55 @@ A multi-account AI quota and telemetry tracker for Antigravity IDE and OpenAI Co
 
 ## Overview
 
-The `ai-quota-tracker` operates two primary nodes that run seamlessly on your local environment:
-1. **Antigravity Tracker (Port 5000)**: A high-density, dark-themed dashboard tracking language server metrics.
-2. **Codex Orchestrator (Port 5001)**: A high-density, light-themed workspace manager with a dynamic profile registry.
+The `ai-quota-tracker` runs a single unified orchestrator on your local machine:
 
-Both nodes automatically discover active Language Server Protocol (LSP) instances in the background, extract authentication tokens securely, and interface with localhost RPC endpoints to monitor usage quotas natively.
+- **Unified Orchestrator (Port 5000)**: A dark-themed, high-density dashboard that auto-discovers all running IDE language server processes, identifies which provider they belong to (via the `--user-data-dir` path), and presents them in a single multi-provider view with per-provider sidebar tabs.
+- **Provider detection** is based on the profile directory name (e.g. `AntigravityProfile1`). Adding a new provider is a one-line config change in `src/orchestrator.py`.
+
+The orchestrator automatically discovers active Language Server Protocol (LSP) instances in the background, extracts authentication tokens securely, and interfaces with localhost RPC endpoints to monitor usage quotas natively.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
     subgraph Local Machine
-    A[Antigravity IDE] -->|LSP Proc| B(Process Scanner)
-    C[OpenAI Codex] -->|LSP Proc| B
-    B -->|Extracts Token| D{RPC Client}
-    D -->|Calls GetUserStatus| E[Localhost Endpoint]
-    E -->|JSON Response| F[Telemetry State]
-    F -->|Renders| G[Port 5000 Dashboard]
-    F -->|Renders| H[Port 5001 Orchestrator]
+    A[Antigravity IDE] -->|LSP Proc + user-data-dir| B(Process Scanner)
+    C[Future IDE] -->|LSP Proc + user-data-dir| B
+    B -->|Detects Provider| D{Provider Router}
+    D -->|Extracts CSRF Token| E[RPC Client]
+    E -->|Calls GetUserStatus| F[Localhost Endpoint]
+    F -->|JSON Response| G[Telemetry State]
+    G -->|Renders| H[Port 5000 — Unified Dashboard]
     end
 ```
 
-For more in-depth details, please refer to our extended documentation and diagrams:
+For more in-depth details, please refer to our extended documentation:
 - **[Architecture Guide](docs/architecture.md)**
 - **[API Reference](docs/API.md)**
-- **[Architecture Diagram (MMD)](docs/architecture.mmd)**
-- **[Profile Lifecycle Flow (MMD)](docs/profile-lifecycle.mmd)**
-- **[Release Flow (MMD)](docs/release-flow.mmd)**
-- **[Core Workflow (MMD)](docs/workflow.mmd)**
+
+## Tracking Codex Desktop Usage
+
+Because the native Codex Desktop application does not expose a local telemetry port (and logs all data globally in a single `~/.codex/sessions` directory), **it is impossible to track multiple isolated Codex accounts natively.**
+
+To solve this, this dashboard tracks "Codex" usage by launching **isolated Antigravity IDE instances** under the hood. Antigravity IDE supports strict browser-level isolation (`--user-data-dir`) and exposes the required local gRPC telemetry ports that this tracker relies on. 
+
+**Requirements:**
+- You MUST have Antigravity IDE installed for Codex multi-account tracking to work.
+- When you click "Add Profile" under the Codex tab, it will intentionally open an Antigravity IDE window. Use this isolated window to log into your Codex account.
+- The dashboard will visually separate your Antigravity-specific accounts from your Codex-specific accounts based on the profile directory name.
+
 
 ## API & Endpoints
 
 See the detailed [API Documentation](docs/API.md) for endpoint usage and returned data models.
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/` | GET | Serves the unified dashboard HTML |
+| `/api/data` | GET | Returns live account data for all detected providers |
+| `/api/history` | GET | Returns the 24h capacity usage history |
+| `/api/providers` | GET | Returns the list of configured provider names |
+| `/api/launch?provider=Antigravity` | POST | Launches a new isolated IDE profile for the given provider |
 
 ## Installation & Execution
 
@@ -54,16 +71,13 @@ This project uses `uv` for lightning-fast dependency management.
    uv sync
    ```
 
-2. **Run Antigravity Dashboard (Port 5000)**:
-   You can run it directly via the source file:
+2. **Run the unified dashboard (Port 5000)**:
    ```powershell
-   uv run python src/antigravity_orchestrator.py
+   uv run python src/orchestrator.py
    ```
-   *(Or use the installed hook: `uv run antigravity-dashboard`)*
+   *(Or use the installed hook: `uv run ai-quota-tracker`)*
 
-3. **Run Codex Orchestrator (Port 5001)**:
-   You can run it directly via the source file:
+3. **Or use the convenience script**:
    ```powershell
-   uv run python src/codex_orchestrator.py
+   .\run_agy.bat
    ```
-   *(Or use the installed hook: `uv run codex-orchestrator`)*

@@ -3,9 +3,9 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport"
-        content="width=device-width, initial-scale=1.0">
-    <title>Antigravity Tracker Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Quota Tracker</title>
+    <meta name="description" content="Real-time AI quota monitoring across multiple providers and accounts.">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
@@ -13,517 +13,858 @@
             theme: {
                 extend: {
                     colors: {
-                        canvasDark: '#090d16',
-                        panelDark: '#111726',
-                        borderDark: '#1e293b'
+                        canvas: '#090d16',
+                        panel: '#111726',
+                        border: '#1e293b'
                     }
                 }
             }
         }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #090d16;
-            color: #e2e8f0;
+        body { font-family: 'Inter', sans-serif; background-color: #090d16; color: #e2e8f0; }
+
+        .glass { background: rgba(17,23,38,0.75); backdrop-filter: blur(12px); border: 1px solid rgba(30,41,59,0.8); }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+        .bar-glow { box-shadow: 0 0 8px currentColor; }
+
+        .provider-tab { transition: all 0.15s ease; }
+        .provider-tab.active {
+            background: rgba(99,102,241,0.15);
+            border-left: 2px solid #6366f1;
+            color: #a5b4fc;
+        }
+        .provider-tab:not(.active):hover {
+            background: rgba(255,255,255,0.04);
         }
 
-        .neon-accent {
-            text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+        .interval-btn { transition: all 0.12s ease; }
+        .interval-btn.active {
+            background: rgba(99,102,241,0.2);
+            color: #a5b4fc;
+            border-color: rgba(99,102,241,0.4);
         }
 
-        .glass-panel {
-            background: rgba(17, 23, 38, 0.7);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(30, 41, 59, 0.8);
+        @keyframes pulse-ring {
+            0%  { transform: scale(0.8); opacity: 1; }
+            100%{ transform: scale(2);   opacity: 0; }
         }
-
-        .progress-bar-glow {
-            box-shadow: 0 0 10px currentColor;
-        }
-
-        /* Scrollbar styles */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #090d16;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #1e293b;
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: #334155;
+        .live-dot::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse-ring 1.5s ease-out infinite;
         }
     </style>
 </head>
 
-<body class="min-h-screen flex flex-col p-4 md:p-8 overflow-x-hidden">
-    <!-- Header -->
-    <header
-        class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 pb-4 border-b border-borderDark gap-4">
-        <div class="flex items-center space-x-4">
-            <div
-                class="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                <i class="ph ph-planet text-white text-2xl"></i>
+<body class="min-h-screen flex overflow-hidden" style="height:100vh;">
+
+    <!-- ── Sidebar ───────────────────────────────────────────────── -->
+    <aside id="sidebar" class="w-60 flex flex-col shrink-0 border-r border-border" style="background:#0c1120;">
+        <!-- Logo -->
+        <div class="px-5 pt-6 pb-4 border-b border-border">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="ph ph-planet text-white text-lg"></i>
+                </div>
+                <div>
+                    <h2 class="text-xs font-bold tracking-widest text-white uppercase">AI Tracker</h2>
+                    <p class="text-[10px] text-indigo-400 font-mono tracking-wide">QUOTA MONITOR</p>
+                </div>
             </div>
+        </div>
+
+        <!-- Provider tabs -->
+        <div class="px-3 pt-4 pb-2">
+            <p class="text-[10px] font-bold uppercase tracking-widest text-slate-500 px-2 mb-2">Providers</p>
+            <nav id="provider-nav" class="space-y-0.5">
+                <!-- Populated by JS -->
+            </nav>
+        </div>
+
+        <!-- Spacer -->
+        <div class="flex-1"></div>
+
+        <!-- Status block -->
+        <div class="p-4 mx-3 mb-4 rounded-xl glass">
+            <div class="flex items-center space-x-2 mb-2">
+                <span class="relative w-2 h-2 live-dot" style="display:inline-block; border-radius:50%; background:#10b981;"></span>
+                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide ml-2">Orchestrator</span>
+            </div>
+            <p class="text-[11px] text-slate-500 font-mono">Scanner: <span class="text-emerald-400 font-semibold">ACTIVE</span></p>
+            <p class="text-[11px] text-slate-500 font-mono">Listener: <span class="text-indigo-400 font-semibold">PORT 5000</span></p>
+            <p class="text-[11px] text-slate-500 font-mono mt-0.5" id="sidebar-last-refresh">Last: —</p>
+        </div>
+    </aside>
+
+    <!-- ── Main area ─────────────────────────────────────────────── -->
+    <div class="flex flex-col flex-1 overflow-hidden">
+
+        <!-- Top bar -->
+        <header class="flex items-center justify-between px-7 py-3 border-b border-border shrink-0" style="background:#0c1120;">
+            <!-- Title + provider breadcrumb -->
             <div>
-                <h1 class="text-xl font-bold tracking-wide text-white uppercase flex items-center space-x-2">
-                    <span>Antigravity</span>
-                    <span
-                        class="text-[10px] bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/30">Tracker
-                        Dashboard</span>
-                </h1>
-                <p class="text-sm text-slate-500 mt-1">More clarity. More insights. Faster decisions.</p>
+                <h1 class="text-base font-bold text-white tracking-tight" id="header-title">Quota Dashboard</h1>
+                <p class="text-xs text-slate-500 mt-0.5" id="header-sub">Multi-provider AI quota monitoring</p>
             </div>
-        </div>
-        <div class="flex flex-wrap items-center gap-4 text-sm bg-panelDark p-2 rounded-xl border border-borderDark">
-            <div
-                class="flex items-center space-x-2 px-3 py-1.5 bg-black/40 rounded-lg text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.1)]">
-                <div class="relative flex h-2.5 w-2.5">
-                    <span
-                        class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+
+            <!-- Controls cluster -->
+            <div class="flex items-center space-x-3">
+                <!-- Timezone selector -->
+                <div class="flex items-center space-x-1.5 text-slate-400 glass px-3 py-1.5 rounded-lg">
+                    <i class="ph ph-globe text-indigo-400 text-sm"></i>
+                    <select id="timezone-select"
+                        class="bg-transparent border-none text-slate-300 text-xs focus:ring-0 cursor-pointer outline-none [&>option]:bg-slate-900 [&>option]:text-slate-300">
+                    </select>
                 </div>
-                <span class="text-xs font-medium">Auto-refresh: <strong id="refresh-indicator">60s</strong></span>
-            </div>
-            <div class="flex items-center space-x-2 text-slate-400 px-2">
-                <i class="ph ph-globe text-lg text-indigo-400"></i>
-                <select id="timezone-select"
-                    class="bg-transparent border-none text-slate-300 text-sm focus:ring-0 cursor-pointer outline-none">
-                    <!-- Populated by JS -->
-                </select>
-            </div>
-            <div class="text-slate-300 font-mono text-sm px-2 border-l border-slate-700"
-                id="clock">Loading...</div>
-            <button class="text-slate-400 hover:text-white transition px-2">
-                <i class="ph ph-gear text-xl"></i>
-            </button>
-            <button onclick="launchProfile()"
-                class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-4 py-2 rounded-lg transition text-sm flex items-center space-x-2 shadow-lg shadow-indigo-600/20 ml-2">
-                <i class="ph ph-plus-circle text-lg"></i> <span>New Profile</span>
-            </button>
-        </div>
-    </header>
 
-    <!-- Main Content -->
-    <main class="flex-1 w-full mx-auto space-y-6">
-        <!-- KPI Cards -->
-        <section class="grid grid-cols-1 md:grid-cols-4 gap-5"
-            id="kpi-cards">
-            <!-- Rendered by JS -->
-        </section>
+                <!-- Clock -->
+                <div id="clock" class="text-slate-300 font-mono text-xs glass px-3 py-1.5 rounded-lg border border-border">--:--:--</div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- Profiles Section -->
-            <section class="lg:col-span-2 space-y-4"
-                id="profiles-container">
-                <!-- Rendered by JS -->
-            </section>
-
-            <!-- Side Panels -->
-            <section class="space-y-6">
-                <!-- 24h Trend Chart -->
-                <div class="glass-panel rounded-xl p-5">
-                    <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i
-                            class="ph ph-trend-up mr-2 text-emerald-400 text-lg"></i> Capacity Usage (24h)</h3>
-                    <div class="h-48">
-                        <canvas id="trendChart"></canvas>
+                <!-- Refresh interval -->
+                <div class="flex items-center space-x-1 glass px-2 py-1.5 rounded-lg border border-border">
+                    <i class="ph ph-clock text-indigo-400 text-sm mr-1"></i>
+                    <div id="interval-btns" class="flex items-center space-x-0.5">
+                        <!-- Populated by JS -->
                     </div>
                 </div>
 
-                <!-- Upcoming Resets -->
-                <div class="glass-panel rounded-xl p-5">
-                    <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i
-                            class="ph ph-clock-countdown mr-2 text-indigo-400 text-lg"></i> Upcoming Resets</h3>
-                    <div id="upcoming-resets"
-                        class="space-y-3 max-h-64 overflow-y-auto pr-2">
-                        <!-- Rendered by JS -->
-                    </div>
-                </div>
+                <!-- Manual sync -->
+                <button id="sync-btn" onclick="manualSync()"
+                    class="flex items-center space-x-1.5 glass border border-border hover:border-indigo-500/50 text-slate-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-medium transition">
+                    <i class="ph ph-arrows-clockwise text-indigo-400" id="sync-icon"></i>
+                    <span>Sync</span>
+                </button>
 
-                <!-- Alerts Panel -->
-                <div class="glass-panel rounded-xl p-5 border-rose-500/20">
-                    <h3 class="text-sm font-bold text-white mb-4 flex items-center"><i
-                            class="ph ph-bell-ringing mr-2 text-rose-400 text-lg"></i> System Alerts</h3>
-                    <div id="alerts-container"
-                        class="space-y-3">
-                        <!-- Rendered by JS -->
+                <!-- Add profile: hidden for Codex since it uses a global single account -->
+                <button id="launch-btn" onclick="launchProfile()"
+                    class="flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition shadow-lg shadow-indigo-600/20"
+                    style="display:none">
+                    <i class="ph ph-plus-circle text-base"></i>
+                    <span>Add Profile</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Scrollable content -->
+        <main class="flex-1 overflow-y-auto px-7 py-6 space-y-6">
+
+            <!-- KPI row -->
+            <section class="grid grid-cols-4 gap-4" id="kpi-cards"></section>
+
+            <!-- Two-column layout: accounts + side panels -->
+            <div class="grid grid-cols-3 gap-6">
+                <!-- Account list -->
+                <section class="col-span-2 space-y-3" id="accounts-container"></section>
+
+                <!-- Side panels -->
+                <aside class="space-y-5">
+                    <!-- 24 h trend -->
+                    <div class="glass rounded-xl p-5">
+                        <h3 class="text-xs font-bold text-white mb-4 flex items-center">
+                            <i class="ph ph-trend-up mr-2 text-emerald-400"></i> Capacity (24 h)
+                        </h3>
+                        <div class="h-44"><canvas id="trendChart"></canvas></div>
                     </div>
-                </div>
-            </section>
-        </div>
-    </main>
+
+                    <!-- Upcoming resets -->
+                    <div class="glass rounded-xl p-5">
+                        <h3 class="text-xs font-bold text-white mb-3 flex items-center">
+                            <i class="ph ph-clock-countdown mr-2 text-indigo-400"></i> Upcoming Resets
+                        </h3>
+                        <div id="upcoming-resets" class="space-y-2 max-h-60 overflow-y-auto pr-1"></div>
+                    </div>
+
+                    <!-- Alerts -->
+                    <div class="glass rounded-xl p-5">
+                        <h3 class="text-xs font-bold text-white mb-3 flex items-center">
+                            <i class="ph ph-bell-ringing mr-2 text-rose-400"></i> System Alerts
+                        </h3>
+                        <div id="alerts-container"></div>
+                    </div>
+                </aside>
+            </div>
+        </main>
+    </div>
 
     <script>
-        let openProfiles = new Set(["user_one_domain_com_14208"]);
+    // ─────────────────────────────────────────────
+    // State
+    // ─────────────────────────────────────────────
+    let allData = [];
+    let providers = [];       // seeded from /api/providers before first data fetch
+    let activeProvider = null;
+    let openAccounts = new Set();
 
-        // Use user's local timezone as default if possible, fallback to KL
-        let detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kuala_Lumpur';
-        let userTimezone = detectedTz;
+    const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kuala_Lumpur';
+    let userTimezone = detectedTz;
 
-        let refreshInterval = 60000; // 60 seconds
-        let timerId = null;
+    // Refresh interval: ms value, or 0 = manual
+    const INTERVALS = [
+        { label: '10s',   ms: 10_000 },
+        { label: '30s',   ms: 30_000 },
+        { label: '60s',   ms: 60_000 },
+        { label: '5m',    ms: 300_000 },
+        { label: '1h',    ms: 3_600_000 },
+        { label: 'Manual',ms: 0 },
+    ];
+    let refreshMs = 60_000;
+    let timerId = null;
 
-        function initTimezones() {
-            const select = document.getElementById('timezone-select');
-            const commonTimezones = ['Asia/Kuala_Lumpur', 'UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo', 'Australia/Sydney', 'America/Los_Angeles'];
-
-            if (!commonTimezones.includes(detectedTz)) commonTimezones.unshift(detectedTz);
-
-            select.innerHTML = commonTimezones.map(tz => {
-                let label = tz;
-                if (tz === 'Asia/Kuala_Lumpur') label = 'UTC+8 (KL)';
-                else if (tz === detectedTz) label = tz + ' (Local)';
-                return `<option value="${tz}" ${tz === userTimezone ? 'selected' : ''}>${label}</option>`;
-            }).join('');
-
-            select.addEventListener('change', (e) => {
-                userTimezone = e.target.value;
-                updateClock();
-                poll(); // Re-render to update times
-            });
-        }
-
-        function updateClock() {
-            try {
-                const options = { timeZone: userTimezone, year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-                document.getElementById('clock').innerText = new Intl.DateTimeFormat('en-US', options).format(new Date());
-            } catch (e) {
-                document.getElementById('clock').innerText = new Date().toLocaleString();
-            }
-        }
+    // ─────────────────────────────────────────────
+    // Init
+    // ─────────────────────────────────────────────
+    async function init() {
+        buildIntervalButtons();
+        initTimezones();
         setInterval(updateClock, 1000);
-
-        async function launchProfile() {
-            await fetch('/api/launch', { method: 'POST' });
-            poll();
-        }
-
-        async function poll() {
-            try {
-                const res = await fetch('/api/data');
-                const data = await res.json();
-                render(data);
-            } catch (e) {
-                console.error("Polling failed", e);
+        updateClock();
+        // Pre-seed the sidebar from the backend's PROVIDERS config so it never
+        // shows "undefined" while waiting for the first live-data response.
+        try {
+            const pvRes = await fetch('/api/providers');
+            if (pvRes.ok) {
+                const pvData = await pvRes.json();
+                if (Array.isArray(pvData) && pvData.length > 0) {
+                    providers = pvData;
+                    activeProvider = providers[0];
+                    buildProviderNav();
+                }
             }
-        }
+        } catch (_) {}
+        await fetchAll();
+        startPolling();
+    }
 
-        function toggle(id) {
-            if (openProfiles.has(id)) openProfiles.delete(id);
-            else openProfiles.add(id);
-            poll(); // Re-render
-        }
+    // ─────────────────────────────────────────────
+    // Refresh interval controls
+    // ─────────────────────────────────────────────
+    function buildIntervalButtons() {
+        const el = document.getElementById('interval-btns');
+        el.innerHTML = INTERVALS.map(({ label, ms }) => `
+            <button class="interval-btn px-2 py-0.5 rounded text-[10px] font-bold font-mono border border-transparent text-slate-500 ${ms === refreshMs ? 'active' : ''}"
+                onclick="setInterval2(${ms})">${label}</button>
+        `).join('');
+    }
 
-        // Helper to format date in chosen timezone
-        function formatResetTime(isoStr) {
-            if (!isoStr || isoStr === "N/A" || isoStr === "") return "N/A";
-            try {
-                const date = new Date(isoStr);
-                const options = { timeZone: userTimezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true };
-                return new Intl.DateTimeFormat('en-CA', options).format(date).replace(',', '');
-            } catch (e) {
-                return isoStr;
+    function setInterval2(ms) {
+        refreshMs = ms;
+        buildIntervalButtons();
+        startPolling();
+    }
+
+    function startPolling() {
+        if (timerId) clearInterval(timerId);
+        if (refreshMs > 0) {
+            timerId = setInterval(fetchAll, refreshMs);
+        }
+    }
+
+    async function manualSync() {
+        const icon = document.getElementById('sync-icon');
+        icon.classList.add('animate-spin');
+        await fetchAll();
+        setTimeout(() => icon.classList.remove('animate-spin'), 600);
+    }
+
+    // ─────────────────────────────────────────────
+    // Timezone + clock
+    // ─────────────────────────────────────────────
+    function initTimezones() {
+        const select = document.getElementById('timezone-select');
+        const common = ['Asia/Kuala_Lumpur','UTC','America/New_York','Europe/London','Asia/Tokyo','Australia/Sydney','America/Los_Angeles'];
+        if (!common.includes(detectedTz)) common.unshift(detectedTz);
+        select.innerHTML = common.map(tz => {
+            let label = tz;
+            if (tz === 'Asia/Kuala_Lumpur') label = 'UTC+8 (KL)';
+            else if (tz === detectedTz && tz !== 'Asia/Kuala_Lumpur') label = tz + ' (Local)';
+            return `<option value="${tz}" ${tz === userTimezone ? 'selected' : ''}>${label}</option>`;
+        }).join('');
+        select.addEventListener('change', e => { userTimezone = e.target.value; updateClock(); renderAll(); });
+    }
+
+    function updateClock() {
+        try {
+            const opts = { timeZone: userTimezone, year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: true };
+            document.getElementById('clock').innerText = new Intl.DateTimeFormat('en-US', opts).format(new Date());
+        } catch(_) {
+            document.getElementById('clock').innerText = new Date().toLocaleString();
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Data fetching
+    // ─────────────────────────────────────────────
+    async function fetchAll() {
+        try {
+            const [dataRes, histRes] = await Promise.all([
+                fetch('/api/data'),
+                fetch('/api/history'),
+            ]);
+            allData = await dataRes.json();
+            if (!Array.isArray(allData)) allData = [];
+
+            // Derive provider list — filter out any null/undefined values defensively
+            const seen = new Set(allData.map(a => a.provider).filter(p => p != null));
+            const liveProviders = [...seen].sort();
+
+            // Merge: keep configured providers order, add any unexpected ones at end
+            const merged = [...providers];
+            for (const p of liveProviders) {
+                if (!merged.includes(p)) merged.push(p);
             }
+            if (merged.length > 0) providers = merged;
+            if (providers.length === 0) providers = ['Antigravity']; // last-resort fallback
+
+            // Ensure activeProvider is always a valid string
+            if (!activeProvider || !providers.includes(activeProvider)) {
+                activeProvider = providers[0];
+            }
+
+            buildProviderNav();
+
+            if (histRes.ok) {
+                const hist = await histRes.json();
+                if (hist && hist.length > 1) {
+                    trendChart.data.labels = hist.map(d => {
+                        const date = new Date(d.timestamp + 'Z');
+                        return new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, hour:'numeric', minute:'2-digit' }).format(date);
+                    });
+                    trendChart.data.datasets[0].data = hist.map(d => d.capacity_used);
+                    trendChart.update();
+                }
+            }
+
+            document.getElementById('sidebar-last-refresh').innerText =
+                'Last: ' + new Intl.DateTimeFormat('en-US', { timeZone: userTimezone, hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: true }).format(new Date());
+
+            // Sync Add Profile button visibility with current provider
+            const launchBtn = document.getElementById('launch-btn');
+            if (launchBtn) launchBtn.style.display = (activeProvider === 'Codex') ? 'none' : 'flex';
+
+            renderAll();
+        } catch(e) {
+            console.error('Fetch failed', e);
         }
+    }
 
-        function render(data) {
-            let totalProfiles = data.length;
-            let totalModels = 0;
-            let exhausted = 0;
-            let totalCapacitySum = 0;
-            let allModels = [];
+    // ─────────────────────────────────────────────
+    // Provider sidebar
+    // ─────────────────────────────────────────────
+    function buildProviderNav() {
+        const nav = document.getElementById('provider-nav');
+        const ICONS = { Antigravity: 'ph-atom', Codex: 'ph-code', Unknown: 'ph-question' };
 
-            const profilesHtml = data.map(acc => {
-                let safeId = acc.email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + acc.pid;
-                let isOpen = openProfiles.has(safeId);
-                let chevRot = isOpen ? 'rotate-90' : '';
-                let bodyHide = isOpen ? 'hidden' : ''; // By default shown if in set, else hidden. Wait, the logic: if bodyHide='hidden', it hides.
-                bodyHide = isOpen ? '' : 'hidden';
+        nav.innerHTML = providers.map(p => {
+            const count = allData.filter(a => a.provider === p).length;
+            const icon = ICONS[p] || 'ph-circle';
+            const isActive = p === activeProvider;
+            return `
+            <button class="provider-tab w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-xs font-semibold text-slate-400 ${isActive ? 'active' : ''}"
+                onclick="selectProvider('${p}')">
+                <span class="flex items-center space-x-2">
+                    <i class="ph ${icon} text-base"></i>
+                    <span>${p}</span>
+                </span>
+                <span class="text-[10px] font-mono bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">${count}</span>
+            </button>`;
+        }).join('');
+    }
 
-                let barColor = acc.avg_used > 80 ? 'bg-rose-500' : (acc.avg_used > 50 ? 'bg-amber-500' : 'bg-emerald-500');
-                totalCapacitySum += acc.avg_used;
+    function selectProvider(p) {
+        activeProvider = p;
+        buildProviderNav();
+        renderAll();
+        // Show/hide Add Profile button depending on provider
+        const btn = document.getElementById('launch-btn');
+        if (btn) btn.style.display = (p === 'Codex') ? 'none' : 'flex';
+    }
 
-                let rows = acc.models.map(m => {
-                    totalModels++;
-                    if (m.used_pct_raw >= 100) exhausted++;
+    // ─────────────────────────────────────────────
+    // Launch profile
+    // ─────────────────────────────────────────────
+    async function launchProfile() {
+        await fetch(`/api/launch?provider=${encodeURIComponent(activeProvider || 'Antigravity')}`, { method: 'POST' });
+        setTimeout(fetchAll, 1200);
+    }
 
-                    if (m.exact_reset_iso && m.exact_reset_iso !== "N/A") {
-                        allModels.push(m);
-                    }
+    // ─────────────────────────────────────────────
+    // Expand / collapse accounts
+    // ─────────────────────────────────────────────
+    function toggleAccount(id) {
+        if (openAccounts.has(id)) openAccounts.delete(id);
+        else openAccounts.add(id);
+        renderAll();
+    }
 
-                    // Format reset time using chosen TZ
-                    let displayReset = m.exact_reset_iso ? formatResetTime(m.exact_reset_iso) : m.exact_reset;
+    // ─────────────────────────────────────────────
+    // Helpers
+    // ─────────────────────────────────────────────
+    function formatResetTime(isoStr) {
+        if (!isoStr || isoStr === 'N/A' || isoStr === '') return 'N/A';
+        try {
+            const opts = { timeZone: userTimezone, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12: true };
+            return new Intl.DateTimeFormat('en-CA', opts).format(new Date(isoStr)).replace(',', '');
+        } catch(_) { return isoStr; }
+    }
 
-                    let icon = 'ph-robot';
-                    if (m.name.toLowerCase().includes('claude')) icon = 'ph-brain';
-                    else if (m.name.toLowerCase().includes('gemini')) icon = 'ph-sparkle';
-                    else if (m.name.toLowerCase().includes('gpt')) icon = 'ph-lightning';
+    function modelIcon(name) {
+        const n = name.toLowerCase();
+        if (n.includes('claude')) return 'ph-brain';
+        if (n.includes('gemini')) return 'ph-sparkle';
+        if (n.includes('gpt')) return 'ph-lightning';
+        if (n.includes('o1') || n.includes('o3')) return 'ph-circle-dashed';
+        return 'ph-robot';
+    }
 
-                    return `
-                    <tr class="border-t border-borderDark/50 text-sm hover:bg-slate-800/30 transition">
-                        <td class="px-5 py-4 font-medium flex items-center space-x-3 text-slate-200">
-                            <i class="ph ${icon} text-lg text-indigo-400"></i>
-                            <span>${m.name}</span>
-                        </td>
-                        <td class="px-5 py-4">
-                            <div class="flex items-center space-x-3">
-                                <span class="font-mono text-slate-300 w-12">${m.usage}</span>
-                                <div class="w-24 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                    <div class="${m.used_pct_raw > 80 ? 'bg-rose-500' : (m.used_pct_raw > 50 ? 'bg-amber-500' : 'bg-emerald-500')} h-full progress-bar-glow" style="width: ${Math.min(m.used_pct_raw, 100)}%"></div>
-                                </div>
-                            </div>
-                        </td>
-                        <td class="px-5 py-4 font-mono ${m.style}">${m.pct}</td>
-                        <td class="px-5 py-4 font-mono text-slate-400 text-xs">${displayReset}</td>
-                        <td class="px-5 py-4 font-mono text-slate-300 text-xs flex items-center space-x-1">
-                            <i class="ph ph-timer"></i> <span>${m.reset_left}</span>
-                        </td>
-                        <td class="px-5 py-4 text-right">
-                            <span class="px-2.5 py-1 text-[10px] font-bold rounded uppercase tracking-wider ${m.status_style}">${m.status_label}</span>
-                        </td>
-                    </tr>
-                `}).join('');
+    // ─────────────────────────────────────────────
+    // Rendering
+    // ─────────────────────────────────────────────
+    function renderAll() {
+        const filtered = allData.filter(a => a.provider === activeProvider);
 
-                return `
-                <div class="glass-panel rounded-xl overflow-hidden shadow-lg transition duration-200 mb-4">
-                    <div class="px-5 py-4 flex justify-between items-center cursor-pointer select-none hover:bg-white/5 transition" onclick="toggle('${safeId}')">
-                        <div class="flex items-center space-x-4">
-                            <i class="ph ph-caret-right text-slate-500 transform transition-transform duration-200 ${chevRot}"></i>
-                            <div class="flex flex-col">
-                                <div class="flex items-center space-x-3">
-                                    <span class="font-bold text-sm text-white">${acc.email}</span>
-                                    <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shadow-[0_0_5px_rgba(99,102,241,0.2)]">${acc.plan}</span>
-                                    <div class="flex items-center space-x-1 text-emerald-400 text-[10px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                        <span>PID: ${acc.pid} • Online</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-4">
-                            <div class="flex items-center space-x-4">
-                                <span class="text-xs font-mono text-slate-400">${acc.avg_used}% Capacity Used</span>
-                                <div class="w-24 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                                    <div class="${barColor} h-full shadow-[0_0_8px_currentColor]" style="width: ${acc.avg_used}%"></div>
-                                </div>
-                            </div>
-                            <button class="text-[10px] bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 px-3 py-1.5 rounded border border-indigo-500/30 transition uppercase font-bold tracking-wider">Details</button>
-                        </div>
-                    </div>
-                    <div id="${safeId}" class="${bodyHide} bg-panelDark/70 border-t border-borderDark/50">
-                        <table class="w-full text-left">
-                            <thead>
-                                <tr class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 bg-black/20">
-                                    <th class="px-5 py-3 rounded-tl-lg">Model</th>
-                                    <th class="px-5 py-3">Usage</th>
-                                    <th class="px-5 py-3">Remaining</th>
-                                    <th class="px-5 py-3">Reset Time</th>
-                                    <th class="px-5 py-3">Time Left</th>
-                                    <th class="px-5 py-3 text-right">Status</th>
-                                </tr>
-                            </thead>
-                            <tbody>${rows}</tbody>
-                        </table>
-                    </div>
+        // Header breadcrumb
+        document.getElementById('header-title').innerText = `${activeProvider || 'Dashboard'} — Quota Monitor`;
+        document.getElementById('header-sub').innerText =
+            filtered.length
+                ? `${filtered.length} active session${filtered.length !== 1 ? 's' : ''} detected`
+                : 'No active sessions detected for this provider';
+
+        renderKPIs(filtered);
+        renderAccounts(filtered);
+        renderResets(filtered);
+        renderAlerts(filtered);
+    }
+
+    function renderKPIs(data) {
+        let totalModels = 0, exhausted = 0, capacitySum = 0;
+        data.forEach(acc => {
+            capacitySum += acc.avg_used;
+            (acc.models || []).forEach(m => {
+                totalModels++;
+                if (m.used_pct_raw >= 100) exhausted++;
+            });
+        });
+        const avgCap = data.length ? Math.round(capacitySum / data.length) : 0;
+        const capColor = avgCap > 80 ? 'text-rose-500' : (avgCap > 50 ? 'text-amber-500' : 'text-emerald-500');
+
+        document.getElementById('kpi-cards').innerHTML = `
+        <div class="glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110">
+                <i class="ph ph-users text-6xl text-blue-400"></i>
+            </div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-blue-400 mb-2 flex items-center">
+                <i class="ph ph-users mr-2"></i> Active Sessions
+            </p>
+            <h3 class="text-4xl font-bold text-white tracking-tight">${data.length}</h3>
+        </div>
+        <div class="glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
+            <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110">
+                <i class="ph ph-cube text-6xl text-emerald-400"></i>
+            </div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center">
+                <i class="ph ph-cube mr-2"></i> Monitored Models
+            </p>
+            <h3 class="text-4xl font-bold text-white tracking-tight">${totalModels}</h3>
+        </div>
+        <div class="glass rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group ${exhausted > 0 ? 'border border-rose-500/40 shadow-[0_0_15px_rgba(244,63,94,0.12)]' : ''}">
+            <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110">
+                <i class="ph ph-warning-circle text-6xl text-rose-400"></i>
+            </div>
+            <p class="text-[10px] font-bold uppercase tracking-wider text-rose-400 mb-2 flex items-center">
+                <i class="ph ph-warning-circle mr-2"></i> Exhausted Quotas
+            </p>
+            <h3 class="text-4xl font-bold text-white tracking-tight">${exhausted}</h3>
+        </div>
+        <div class="glass rounded-xl p-5 flex justify-between items-center">
+            <div>
+                <p class="text-[10px] font-bold uppercase tracking-wider text-indigo-400 mb-2 flex items-center">
+                    <i class="ph ph-gauge mr-2"></i> Avg Capacity Used
+                </p>
+                <h3 class="text-4xl font-bold text-white tracking-tight">${avgCap}%</h3>
+            </div>
+            <div class="relative w-20 h-20">
+                <svg class="w-full h-full transform -rotate-90 drop-shadow-[0_0_6px_currentColor] ${capColor}" viewBox="0 0 36 36">
+                    <path class="text-slate-800" stroke-width="4" stroke="currentColor" fill="transparent"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                    <path stroke-width="4" stroke-dasharray="${avgCap}, 100" stroke-linecap="round" stroke="currentColor" fill="transparent"
+                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                </svg>
+            </div>
+        </div>`;
+    }
+
+    function renderAccounts(data) {
+        const container = document.getElementById('accounts-container');
+
+        // ── Codex: special log-based panel ──────────────────
+        if (activeProvider === 'Codex') {
+            const cx = data.find(a => a.codex_stats);
+            if (!cx) {
+                container.innerHTML = `
+                <div class="glass rounded-xl p-10 text-center border border-dashed border-slate-700">
+                    <i class="ph ph-file-search text-4xl text-slate-600 block mb-3"></i>
+                    <h4 class="text-sm font-bold text-slate-400">No Codex Sessions Found</h4>
+                    <p class="text-xs text-slate-500 max-w-sm mx-auto mt-2">
+                        No <code class="text-emerald-400">~/.codex/sessions</code> logs detected. Open Codex Desktop
+                        and make a request to generate log files.
+                    </p>
                 </div>`;
-            }).join('');
-
-            document.getElementById('profiles-container').innerHTML = profilesHtml;
-
-            let avgCapacity = totalProfiles > 0 ? Math.round(totalCapacitySum / totalProfiles) : 0;
-            let capColor = avgCapacity > 80 ? 'text-rose-500' : (avgCapacity > 50 ? 'text-amber-500' : 'text-emerald-500');
-
-            // Render KPIs
-            document.getElementById('kpi-cards').innerHTML = `
-                <div class="glass-panel rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><i class="ph ph-users text-6xl text-blue-500"></i></div>
-                    <p class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-2 flex items-center"><i class="ph ph-users mr-2"></i> Active Profiles</p>
-                    <div class="flex items-end space-x-3">
-                        <h3 class="text-4xl font-bold text-white tracking-tight">${totalProfiles}</h3>
-                        <span class="text-[10px] text-emerald-400 flex items-center mb-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-up-right mr-0.5"></i> 0 from last refresh</span>
-                    </div>
-                </div>
-                <div class="glass-panel rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><i class="ph ph-cube text-6xl text-emerald-500"></i></div>
-                    <p class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-2 flex items-center"><i class="ph ph-cube mr-2"></i> Monitored Models</p>
-                    <div class="flex items-end space-x-3">
-                        <h3 class="text-4xl font-bold text-white tracking-tight">${totalModels}</h3>
-                        <span class="text-[10px] text-emerald-400 flex items-center mb-1.5 bg-emerald-500/10 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-up-right mr-0.5"></i> 0 from last refresh</span>
-                    </div>
-                </div>
-                <div class="glass-panel rounded-xl p-5 flex flex-col justify-between relative overflow-hidden group border ${exhausted > 0 ? 'border-rose-500/50 shadow-[0_0_15px_rgba(244,63,94,0.15)]' : 'border-transparent'}">
-                    <div class="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition transform group-hover:scale-110"><i class="ph ph-warning-circle text-6xl text-rose-500"></i></div>
-                    <p class="text-xs font-bold uppercase tracking-wider text-rose-400 mb-2 flex items-center"><i class="ph ph-warning-circle mr-2"></i> Exhausted Quotas</p>
-                    <div class="flex items-end space-x-3">
-                        <h3 class="text-4xl font-bold text-white tracking-tight">${exhausted}</h3>
-                        <span class="text-[10px] ${exhausted > 0 ? 'text-rose-400 bg-rose-500/10' : 'text-slate-400 bg-slate-800'} flex items-center mb-1.5 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-right mr-0.5"></i> 0 from last refresh</span>
-                    </div>
-                </div>
-                <div class="glass-panel rounded-xl p-5 flex justify-between items-center relative overflow-hidden">
-                    <div class="z-10">
-                        <p class="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-2 flex items-center"><i class="ph ph-gauge mr-2"></i> Total Capacity</p>
-                        <div class="flex items-end space-x-2">
-                            <h3 class="text-4xl font-bold text-white tracking-tight">${avgCapacity}%</h3>
-                            <span class="text-[10px] text-rose-400 flex items-center mb-1.5 bg-rose-500/10 px-1.5 py-0.5 rounded"><i class="ph ph-arrow-up-right mr-0.5"></i> +5%</span>
-                        </div>
-                    </div>
-                    <div class="relative w-20 h-20 z-10">
-                        <svg class="w-full h-full transform -rotate-90 drop-shadow-[0_0_8px_currentColor] ${capColor}" viewBox="0 0 36 36">
-                            <path class="text-slate-800" stroke-width="4" stroke="currentColor" fill="transparent" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                            <path class="currentColor" stroke-width="4" stroke-dasharray="${avgCapacity}, 100" stroke-linecap="round" stroke="currentColor" fill="transparent" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                        </svg>
-                    </div>
-                </div>
-            `;
-
-            // Render Upcoming Resets
-            let upcomingHtml = '';
-            if (allModels.length > 0) {
-                allModels.sort((a, b) => {
-                    let parseTime = (str) => {
-                        let match = str.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/);
-                        if (!match) return 99999;
-                        let h = parseInt(match[1] || 0);
-                        let m = parseInt(match[2] || 0);
-                        return h * 60 + m;
-                    };
-                    return parseTime(a.reset_left) - parseTime(b.reset_left);
-                });
-
-                upcomingHtml = allModels.slice(0, 6).map(m => {
-                    let icon = 'ph-robot';
-                    if (m.name.toLowerCase().includes('claude')) icon = 'ph-brain';
-                    else if (m.name.toLowerCase().includes('gemini')) icon = 'ph-sparkle';
-                    else if (m.name.toLowerCase().includes('gpt')) icon = 'ph-lightning';
-
-                    return `
-                    <div class="flex justify-between items-center text-sm p-3 rounded-lg bg-black/20 border border-white/5 hover:bg-black/40 transition">
-                        <div class="flex items-center space-x-3 text-slate-300">
-                            <div class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
-                                <i class="ph ${icon} text-indigo-400"></i>
-                            </div>
-                            <span class="font-medium text-xs">${m.name}</span>
-                        </div>
-                        <span class="text-indigo-400 font-mono text-[10px] bg-indigo-500/10 border border-indigo-500/20 px-2 py-1 rounded shadow-[0_0_5px_rgba(99,102,241,0.2)]">in ${m.reset_left}</span>
-                    </div>
-                `}).join('');
-            } else {
-                upcomingHtml = '<div class="text-slate-500 text-sm text-center py-4 bg-black/20 rounded-lg">No upcoming resets</div>';
+                return;
             }
-            document.getElementById('upcoming-resets').innerHTML = upcomingHtml;
+            const s = cx.codex_stats;
+            const usedColor = s.used_percent > 80 ? 'text-rose-400' : (s.used_percent > 50 ? 'text-amber-400' : 'text-emerald-400');
+            const barColor  = s.used_percent > 80 ? 'bg-rose-500'   : (s.used_percent > 50 ? 'bg-amber-500'   : 'bg-emerald-500');
+            container.innerHTML = `
+            <!-- ⚠ Limitation Banner -->
+            <div class="flex items-start space-x-3 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl px-4 py-3 text-xs">
+                <i class="ph ph-warning text-lg shrink-0 mt-0.5"></i>
+                <div>
+                    <span class="font-bold">Data reflects last known request only.</span>
+                    Stats are parsed from local <code class="text-amber-200">~/.codex/sessions</code> log files and
+                    update only when Codex Desktop makes a new API call. If idle, figures may be stale.
+                    Multi-account isolation is not supported by Codex Desktop — only the currently active account is shown.
+                </div>
+            </div>
 
-            // Render Alerts
-            let alertsHtml = '';
-            if (exhausted > 0) {
-                alertsHtml = `
-                    <div class="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-4 rounded-xl text-sm flex items-start space-x-4 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
-                        <div class="bg-rose-500/20 p-2 rounded-lg">
-                            <i class="ph ph-warning-octagon text-2xl"></i>
-                        </div>
-                        <div>
-                            <p class="font-bold text-base">Quota Exhausted</p>
-                            <p class="text-rose-400/80 text-xs mt-1">${exhausted} model(s) have reached their usage limits and are blocked.</p>
+            <!-- Rate Limit Summary -->
+            <div class="glass rounded-xl overflow-hidden shadow-lg">
+                <div class="px-5 py-3.5 border-b border-border/50 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i class="ph ph-code text-emerald-400 text-lg"></i>
+                        <span class="font-bold text-sm text-white">Codex (Active Account)</span>
+                        <span class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded
+                            bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            ${s.plan_type} Plan
+                        </span>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <span class="font-mono text-xs ${usedColor} font-bold">${s.used_percent.toFixed(1)}% used</span>
+                        <div class="w-24 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="${barColor} h-full bar-glow" style="width:${Math.min(s.used_percent,100)}%"></div>
                         </div>
                     </div>
-                `;
-            } else {
-                alertsHtml = `
-                    <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl text-sm flex items-center space-x-4">
-                        <div class="bg-emerald-500/20 p-2 rounded-lg">
-                            <i class="ph ph-check-circle text-2xl"></i>
-                        </div>
-                        <div>
-                            <p class="font-bold text-base">System Normal</p>
-                            <p class="text-emerald-400/80 text-xs mt-1">All models are within quota limits.</p>
-                        </div>
+                </div>
+
+                <!-- Rate Window -->
+                <div class="grid grid-cols-3 gap-0 divide-x divide-border/50 border-b border-border/50" style="background:rgba(0,0,0,0.25)">
+                    <div class="px-5 py-4">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Rate Window</p>
+                        <p class="text-xl font-bold text-white">${s.window_label}</p>
                     </div>
-                `;
-            }
-            document.getElementById('alerts-container').innerHTML = alertsHtml;
+                    <div class="px-5 py-4">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Resets In</p>
+                        <p class="text-xl font-bold text-indigo-400 flex items-center space-x-1">
+                            <i class="ph ph-clock-countdown text-base"></i>
+                            <span>${s.reset_countdown}</span>
+                        </p>
+                        <p class="text-[10px] text-slate-600 mt-0.5">${s.reset_at_local}</p>
+                    </div>
+                    <div class="px-5 py-4">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Credits</p>
+                        <p class="text-xl font-bold ${s.credits !== null ? 'text-yellow-400' : 'text-slate-600'}">${s.credits !== null ? s.credits : 'N/A'}</p>
+                    </div>
+                </div>
+
+                <!-- Sessions & Prompts -->
+                <div class="grid grid-cols-3 gap-0 divide-x divide-border/50 border-b border-border/50" style="background:rgba(0,0,0,0.2)">
+                    <div class="px-5 py-4">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Total Sessions</p>
+                        <p class="text-xl font-bold text-white">${s.total_sessions}</p>
+                    </div>
+                    <div class="px-5 py-4">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Total Prompts</p>
+                        <p class="text-xl font-bold text-white">${s.total_prompts}</p>
+                    </div>
+                    <div class="px-5 py-4">
+                        <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Context Window</p>
+                        <p class="text-xl font-bold text-slate-300">${s.context_window >= 1000 ? (s.context_window/1000).toFixed(0)+'K' : s.context_window}</p>
+                    </div>
+                </div>
+
+                <!-- Token Breakdown Table -->
+                <table class="w-full text-left" style="background:rgba(0,0,0,0.25)">
+                    <thead class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 bg-black/20">
+                        <tr>
+                            <th class="px-5 py-2.5">Metric</th>
+                            <th class="px-5 py-2.5 text-right">Last Request</th>
+                            <th class="px-5 py-2.5 text-right">Latest Session</th>
+                            <th class="px-5 py-2.5 text-right">All-Time (Logs)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${[
+                            {label:'Input Tokens',     key:'input_tokens',     icon:'ph-arrow-down-right'},
+                            {label:'Output Tokens',    key:'output_tokens',    icon:'ph-arrow-up-right'},
+                            {label:'Cached Tokens',    key:'cached_tokens',    icon:'ph-lightning'},
+                            {label:'Reasoning Tokens', key:'reasoning_tokens', icon:'ph-brain'},
+                            {label:'Total Tokens',     key:'total_tokens',     icon:'ph-sigma'},
+                        ].map(row => `
+                        <tr class="border-t border-border/50 text-sm hover:bg-white/5 transition">
+                            <td class="px-5 py-3 font-medium flex items-center space-x-2 text-slate-300">
+                                <i class="ph ${row.icon} text-indigo-400 text-sm"></i>
+                                <span>${row.label}</span>
+                            </td>
+                            <td class="px-5 py-3 text-right font-mono text-slate-300 text-xs">${s.last_request[row.key] ?? '—'}</td>
+                            <td class="px-5 py-3 text-right font-mono text-emerald-400 text-xs font-semibold">${s.this_session[row.key] ?? '—'}</td>
+                            <td class="px-5 py-3 text-right font-mono text-indigo-400 text-xs">${row.key !== 'total_tokens' ? (s.all_sessions[row.key] ?? '—') : '—'}</td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>
+
+                <!-- Last Updated -->
+                <div class="px-5 py-2.5 flex items-center justify-end space-x-1.5 border-t border-border/50" style="background:rgba(0,0,0,0.3)">
+                    <i class="ph ph-clock text-slate-600 text-xs"></i>
+                    <span class="text-[10px] text-slate-600">Last log update: <span class="text-slate-500 font-mono">${s.last_updated}</span></span>
+                </div>
+            </div>`;
+            return;
+        }
+        // ── End Codex panel ─────────────────────────────────
+
+        if (!data.length) {
+            container.innerHTML = `
+            <div class="glass rounded-xl p-12 text-center border border-dashed border-slate-700">
+                <i class="ph ph-planet text-4xl text-slate-600 block mb-3"></i>
+                <h4 class="text-sm font-bold text-slate-400">No Active Sessions</h4>
+                <p class="text-xs text-slate-600 max-w-xs mx-auto mt-1 mb-4">
+                    Launch a new profile to start monitoring, or wait for an existing IDE window to appear.
+                </p>
+                <button onclick="launchProfile()"
+                    class="inline-flex items-center space-x-1.5 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-semibold transition">
+                    <i class="ph ph-plus-circle"></i><span>Add Profile</span>
+                </button>
+            </div>`;
+            return;
         }
 
-        // Initialize chart
-        const ctx = document.getElementById('trendChart').getContext('2d');
+        // Auto-open first account if nothing is open yet
+        if (openAccounts.size === 0 && data.length > 0) {
+            const id = data[0].email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + data[0].pid;
+            openAccounts.add(id);
+        }
 
-        // Gradient for chart line
-        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(99, 102, 241, 0.4)');
-        gradient.addColorStop(1, 'rgba(99, 102, 241, 0.0)');
+        container.innerHTML = data.map(acc => {
+            const id = acc.email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + acc.pid;
+            const isOpen = openAccounts.has(id);
+            const barColor = acc.avg_used > 80 ? 'bg-rose-500' : (acc.avg_used > 50 ? 'bg-amber-500' : 'bg-emerald-500');
 
-        const trendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['10 AM', '12 PM', '2 PM', '4 PM', '6 PM', '8 PM', '10 PM', '12 AM', '2 AM', '4 AM', '6 AM', '8 AM', '10 AM'],
-                datasets: [{
-                    label: 'Capacity Used %',
-                    data: [15, 18, 25, 22, 45, 55, 48, 30, 25, 38, 55, 68, 45],
-                    borderColor: '#818cf8',
-                    backgroundColor: gradient,
-                    borderWidth: 2,
-                    tension: 0.4,
-                    fill: true,
-                    pointBackgroundColor: '#c7d2fe',
-                    pointBorderColor: '#4f46e5',
-                    pointBorderWidth: 2,
-                    pointRadius: 3,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(15, 23, 42, 0.9)',
-                        titleColor: '#cbd5e1',
-                        bodyColor: '#fff',
-                        borderColor: 'rgba(51, 65, 85, 0.5)',
-                        borderWidth: 1,
-                        padding: 10,
-                        displayColors: false,
-                        callbacks: {
-                            label: function (context) { return context.parsed.y + '% Used'; }
-                        }
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        grid: { color: 'rgba(30, 41, 59, 0.3)', drawBorder: false },
-                        ticks: { color: '#64748b', stepSize: 25, callback: (v) => v + '%', font: { family: 'Inter', size: 10 } }
-                    },
-                    x: {
-                        grid: { display: false, drawBorder: false },
-                        ticks: { color: '#64748b', maxTicksLimit: 6, font: { family: 'Inter', size: 10 } }
-                    }
-                },
-                interaction: { intersect: false, mode: 'index' },
+            let rowsHtml;
+            if (!acc.models || acc.models.length === 0) {
+                rowsHtml = `
+                <tr><td colspan="6" class="px-5 py-8 text-center text-slate-500 text-xs">
+                    <i class="ph ph-hourglass text-lg block mb-1"></i>
+                    Awaiting model data — complete sign-in inside the IDE window.
+                </td></tr>`;
+            } else {
+                rowsHtml = acc.models.map(m => `
+                <tr class="border-t border-border/50 text-sm hover:bg-white/5 transition">
+                    <td class="px-5 py-3 font-medium flex items-center space-x-2 text-slate-200">
+                        <i class="ph ${modelIcon(m.name)} text-indigo-400 text-base shrink-0"></i>
+                        <span class="truncate">${m.name}</span>
+                    </td>
+                    <td class="px-5 py-3">
+                        <div class="flex items-center space-x-2">
+                            <span class="font-mono text-slate-400 text-xs w-14 shrink-0">${m.usage}</span>
+                            <div class="w-20 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="${m.used_pct_raw > 80 ? 'bg-rose-500 bar-glow' : (m.used_pct_raw > 50 ? 'bg-amber-500' : 'bg-emerald-500')} h-full"
+                                    style="width:${Math.min(m.used_pct_raw,100)}%"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-5 py-3 font-mono ${m.style} text-xs">${m.pct}</td>
+                    <td class="px-5 py-3 font-mono text-slate-500 text-xs">${m.exact_reset_iso ? formatResetTime(m.exact_reset_iso) : m.exact_reset}</td>
+                    <td class="px-5 py-3 font-mono text-slate-400 text-xs">
+                        <span class="flex items-center space-x-1"><i class="ph ph-timer"></i><span>${m.reset_left}</span></span>
+                    </td>
+                    <td class="px-5 py-3 text-right">
+                        <span class="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${m.status_style}">${m.status_label}</span>
+                    </td>
+                </tr>`).join('');
             }
+
+            return `
+            <div class="glass rounded-xl overflow-hidden shadow-lg">
+                <div class="px-5 py-3.5 flex justify-between items-center cursor-pointer select-none hover:bg-white/[0.03] transition"
+                    onclick="toggleAccount('${id}')">
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <i class="ph ph-caret-right text-slate-500 text-sm shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}"></i>
+                        <div class="min-w-0">
+                            <div class="flex items-center space-x-2 flex-wrap gap-y-1">
+                                <span class="font-bold text-sm text-white truncate">${acc.email}</span>
+                                <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">${acc.plan}</span>
+                                <span class="flex items-center space-x-1 text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
+                                    <span>PID ${acc.pid}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3 shrink-0 ml-4">
+                        <span class="text-xs font-mono text-slate-500">${acc.avg_used}% used</span>
+                        <div class="w-20 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                            <div class="${barColor} h-full bar-glow" style="width:${acc.avg_used}%"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="${isOpen ? '' : 'hidden'} border-t border-border/50" style="background:rgba(0,0,0,0.25);">
+                    <table class="w-full text-left">
+                        <thead class="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 bg-black/20">
+                            <tr>
+                                <th class="px-5 py-2.5">Model</th>
+                                <th class="px-5 py-2.5">Usage</th>
+                                <th class="px-5 py-2.5">Remaining</th>
+                                <th class="px-5 py-2.5">Reset Time</th>
+                                <th class="px-5 py-2.5">Time Left</th>
+                                <th class="px-5 py-2.5 text-right">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rowsHtml}</tbody>
+                    </table>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    function renderResets(data) {
+        const allModels = [];
+        data.forEach(acc => {
+            (acc.models || []).forEach(m => {
+                if (m.exact_reset_iso && m.exact_reset_iso !== 'N/A') {
+                    allModels.push({ ...m, account: acc.email });
+                }
+            });
         });
 
-        // Initialize and start polling
-        initTimezones();
-        updateClock();
+        allModels.sort((a, b) => {
+            const parse = s => { const r = s.match(/(?:(\d+)h)?\s*(?:(\d+)m)?/); if (!r) return 99999; return (parseInt(r[1]||0)*60 + parseInt(r[2]||0)); };
+            return parse(a.reset_left) - parse(b.reset_left);
+        });
 
-        function startPolling() {
-            if (timerId) clearInterval(timerId);
-            timerId = setInterval(poll, refreshInterval);
+        const el = document.getElementById('upcoming-resets');
+        if (!allModels.length) {
+            el.innerHTML = '<div class="text-slate-600 text-xs text-center py-4 bg-black/20 rounded-lg">No upcoming resets</div>';
+            return;
         }
+        el.innerHTML = allModels.slice(0, 6).map(m => `
+        <div class="flex justify-between items-center p-2.5 rounded-lg bg-black/20 border border-white/5 hover:bg-black/40 transition">
+            <div class="flex items-center space-x-2 min-w-0">
+                <div class="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
+                    <i class="ph ${modelIcon(m.name)} text-indigo-400 text-sm"></i>
+                </div>
+                <span class="text-slate-300 text-xs font-medium truncate">${m.name}</span>
+            </div>
+            <span class="text-indigo-400 font-mono text-[10px] bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded shrink-0 ml-2">in ${m.reset_left}</span>
+        </div>`).join('');
+    }
 
-        poll();
-        startPolling();
+    function renderAlerts(data) {
+        let exhausted = 0;
+        data.forEach(acc => (acc.models || []).forEach(m => { if (m.used_pct_raw >= 100) exhausted++; }));
+        const el = document.getElementById('alerts-container');
+
+        if (exhausted > 0) {
+            el.innerHTML = `
+            <div class="bg-rose-500/10 border border-rose-500/30 text-rose-400 p-4 rounded-xl flex items-start space-x-3 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+                <div class="bg-rose-500/20 p-2 rounded-lg shrink-0"><i class="ph ph-warning-octagon text-xl"></i></div>
+                <div>
+                    <p class="font-bold text-sm">Quota Exhausted</p>
+                    <p class="text-rose-400/80 text-xs mt-0.5">${exhausted} model(s) have reached their usage limits.</p>
+                </div>
+            </div>`;
+        } else if (data.length === 0) {
+            el.innerHTML = `
+            <div class="bg-slate-800/50 border border-slate-700 text-slate-500 p-4 rounded-xl flex items-start space-x-3">
+                <div class="bg-slate-700/50 p-2 rounded-lg shrink-0"><i class="ph ph-info text-xl"></i></div>
+                <div>
+                    <p class="font-bold text-sm text-slate-400">No Sessions</p>
+                    <p class="text-slate-600 text-xs mt-0.5">No active providers detected yet.</p>
+                </div>
+            </div>`;
+        } else {
+            el.innerHTML = `
+            <div class="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 p-4 rounded-xl flex items-start space-x-3">
+                <div class="bg-emerald-500/20 p-2 rounded-lg shrink-0"><i class="ph ph-check-circle text-xl"></i></div>
+                <div>
+                    <p class="font-bold text-sm">System Normal</p>
+                    <p class="text-emerald-400/80 text-xs mt-0.5">All models are within quota limits.</p>
+                </div>
+            </div>`;
+        }
+    }
+
+    // ─────────────────────────────────────────────
+    // Trend chart
+    // ─────────────────────────────────────────────
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, 'rgba(99,102,241,0.35)');
+    gradient.addColorStop(1, 'rgba(99,102,241,0.0)');
+
+    const trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Capacity Used %',
+                data: [],
+                borderColor: '#818cf8',
+                backgroundColor: gradient,
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#c7d2fe',
+                pointBorderColor: '#4f46e5',
+                pointBorderWidth: 2,
+                pointRadius: 2.5,
+                pointHoverRadius: 5,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: 'rgba(15,23,42,0.9)',
+                    titleColor: '#cbd5e1',
+                    bodyColor: '#fff',
+                    borderColor: 'rgba(51,65,85,0.5)',
+                    borderWidth: 1,
+                    padding: 8,
+                    displayColors: false,
+                    callbacks: { label: c => c.parsed.y + '% Used' }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true, max: 100,
+                    grid: { color: 'rgba(30,41,59,0.25)', drawBorder: false },
+                    ticks: { color: '#64748b', stepSize: 25, callback: v => v + '%', font: { family: 'Inter', size: 10 } }
+                },
+                x: {
+                    grid: { display: false, drawBorder: false },
+                    ticks: { color: '#64748b', maxTicksLimit: 6, font: { family: 'Inter', size: 10 } }
+                }
+            },
+            interaction: { intersect: false, mode: 'index' }
+        }
+    });
+
+    // ─────────────────────────────────────────────
+    // Boot
+    // ─────────────────────────────────────────────
+    init();
     </script>
 </body>
-
 </html>

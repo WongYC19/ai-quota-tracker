@@ -26,3 +26,6 @@ logs/*
 
 .DS_Store
 Thumbs.db
+
+*.bat
+*.log

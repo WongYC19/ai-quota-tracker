@@ -1,7 +1,7 @@
 [project]
 name = "ai-quota-tracker"
 version = "1.0.0"
-description = "Multi-account AI quota and telemetry tracker for Antigravity IDE and OpenAI Codex"
+description = "Multi-provider AI quota and telemetry tracker — unified dashboard for Antigravity and future IDE providers"
 readme = "README.md"
 requires-python = ">=3.12"
 
@@ -18,8 +18,7 @@ Homepage = "https://github.com/WongYC19/ai-quota-tracker"
 Repository = "https://github.com/WongYC19/ai-quota-tracker"
 
 [project.scripts]
-antigravity-dashboard = "src.antigravity_orchestrator:main"
-codex-orchestrator = "src.codex_orchestrator:main"
+ai-quota-tracker = "src.orchestrator:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -40,6 +39,9 @@ dev = [
 
 [tool.black]
 line-length = 100
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100
