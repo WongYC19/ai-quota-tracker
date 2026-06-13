@@ -44,6 +44,11 @@ PROVIDERS = {
         "ide_command": "Antigravity IDE",
         "color": "emerald",
     },
+    "Gemini": {
+        "profile_prefix": None,  # Not IDE-launched; read from cockpit cache
+        "ide_command": None,
+        "color": "blue",
+    },
 }
 
 # ─────────────────────────────────────────────
@@ -59,7 +64,78 @@ def init_db():
                 capacity_used INTEGER
             )
         """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS profile_cache (
+                email TEXT,
+                provider TEXT,
+                plan TEXT,
+                avg_used INTEGER,
+                models TEXT, -- JSON string
+                last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (email, provider)
+            )
+        """)
         conn.commit()
+
+
+def save_profiles_to_cache(active_data: list[dict]):
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            for acc in active_data:
+                if acc["email"] in ("Pending Login...", "Unknown"):
+                    continue
+                conn.execute("""
+                    INSERT INTO profile_cache (email, provider, plan, avg_used, models, last_seen)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(email, provider) DO UPDATE SET
+                        plan = excluded.plan,
+                        avg_used = excluded.avg_used,
+                        models = excluded.models,
+                        last_seen = CURRENT_TIMESTAMP
+                """, (
+                    acc["email"],
+                    acc["provider"],
+                    acc["plan"],
+                    acc["avg_used"],
+                    json.dumps(acc["models"])
+                ))
+            conn.commit()
+    except Exception as e:
+        print(f"[cache] save failed: {e}")
+
+
+def get_cached_profiles() -> list[dict]:
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            cursor = conn.execute("SELECT email, provider, plan, avg_used, models FROM profile_cache")
+            rows = cursor.fetchall()
+            return [
+                {
+                    "email": r[0],
+                    "provider": r[1],
+                    "plan": r[2],
+                    "avg_used": r[3],
+                    "models": json.loads(r[4]) if r[4] else [],
+                    "pid": None,
+                    "is_cached": True
+                }
+                for r in rows
+            ]
+    except Exception as e:
+        print(f"[cache] get failed: {e}")
+        return []
+
+
+def delete_profile_from_cache(email: str, provider: str):
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.execute(
+                "DELETE FROM profile_cache WHERE email = ? AND provider = ?",
+                (email, provider)
+            )
+            conn.commit()
+    except Exception as e:
+        print(f"[cache] delete failed: {e}")
 
 
 def save_history(capacity_used: int):
@@ -162,6 +238,7 @@ def _detect_provider(proc: psutil.Process, cmdline: list[str]) -> str:
     """
     Identify the provider by inspecting --user-data-dir on the process cmdline.
     Falls back to the executable path when no --user-data-dir flag is present.
+    Skips providers that are not IDE-launched (e.g. Gemini, with profile_prefix=None).
     """
     for arg in cmdline:
         if "--user-data-dir" in arg:
@@ -169,7 +246,8 @@ def _detect_provider(proc: psutil.Process, cmdline: list[str]) -> str:
             path = arg.split("=", 1)[1] if "=" in arg else ""
             base = os.path.basename(path.rstrip("/\\"))
             for name, cfg in PROVIDERS.items():
-                if base.startswith(cfg["profile_prefix"]):
+                prefix = cfg.get("profile_prefix")
+                if prefix and base.startswith(prefix):
                     return name
             # Has a data-dir but matches no configured prefix → Unknown
             return "Unknown"
@@ -180,11 +258,17 @@ def _detect_provider(proc: psutil.Process, cmdline: list[str]) -> str:
     except (psutil.AccessDenied, psutil.NoSuchProcess):
         exe = ""
     for name, cfg in PROVIDERS.items():
-        if cfg["ide_command"].lower().replace(" ", "") in exe.replace(" ", "") or \
-           cfg["profile_prefix"].lower().replace("profile", "") in exe:
+        ide_cmd = cfg.get("ide_command")
+        prefix = cfg.get("profile_prefix")
+        if not ide_cmd or not prefix:
+            continue  # Skip non-IDE providers (e.g. Gemini)
+        if ide_cmd.lower().replace(" ", "") in exe.replace(" ", "") or \
+           prefix.lower().replace("profile", "") in exe:
             return name
-    # Default to first configured provider rather than "Unknown" so sessions
-    # launched without an explicit profile still appear in the dashboard.
+    # Default to first IDE-launched provider
+    for name, cfg in PROVIDERS.items():
+        if cfg.get("ide_command"):
+            return name
     return next(iter(PROVIDERS), "Unknown")
 
 
@@ -560,6 +644,141 @@ def scrape_codex_logs() -> dict | None:
 
 
 # ─────────────────────────────────────────────
+# Gemini Cockpit cache reader
+# ─────────────────────────────────────────────
+
+def _cockpit_cache_dir() -> Path | None:
+    """Return the ~/.antigravity_cockpit/cache/quota_api_v1_plugin/authorized path."""
+    if platform.system() == "Windows":
+        base = Path(os.environ.get("USERPROFILE", os.path.expanduser("~")))
+    else:
+        base = Path.home()
+    candidate = base / ".antigravity_cockpit" / "cache" / "quota_api_v1_plugin" / "authorized"
+    return candidate if candidate.is_dir() else None
+
+
+def scrape_gemini_cockpit() -> list[dict]:
+    """
+    Read per-account Gemini API quota data from the Antigravity Cockpit local cache.
+    Each JSON file in ~/.antigravity_cockpit/cache/quota_api_v1_plugin/authorized/
+    corresponds to one authenticated Google/GCP account and contains per-model
+    remainingFraction and resetTime values — no API calls required.
+
+    Returns a list of account dicts ready for /api/data integration.
+    """
+    cache_dir = _cockpit_cache_dir()
+    if not cache_dir:
+        return []
+
+    accounts: list[dict] = []
+    for json_file in sorted(cache_dir.glob("*.json")):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            email = data.get("email", "Unknown")
+            project_id = data.get("projectId", "")
+            updated_at_ms = data.get("updatedAt", 0)
+            payload = data.get("payload", {})
+            models_raw = payload.get("models", {})
+
+            last_updated_str = datetime.fromtimestamp(
+                updated_at_ms / 1000, tz=timezone.utc
+            ).astimezone(LOCAL_TZ).strftime("%Y-%m-%d %I:%M:%S %p")
+
+            models: list[dict] = []
+            total_rem_pct = 0
+            model_count = 0
+
+            for model_id, model_data in models_raw.items():
+                display_name = model_data.get("displayName")
+                # Skip unnamed or internal placeholder models
+                if not display_name or display_name == model_id:
+                    continue
+
+                quota_info = model_data.get("quotaInfo", {})
+                remaining_fraction = float(quota_info.get("remainingFraction", 1.0))
+                reset_raw = quota_info.get("resetTime", "")
+
+                rem_pct = int(remaining_fraction * 100)
+                used_pct = 100 - rem_pct
+                is_overaged = remaining_fraction <= 0
+
+                if is_overaged:
+                    status_label = "Overaged"
+                    status_style = "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                    pct_style = "text-rose-500 font-bold"
+                elif rem_pct == 100 and not reset_raw:
+                    status_label = "Unlimited"
+                    status_style = "bg-blue-500/10 text-blue-400 border border-blue-500/20"
+                    pct_style = "text-blue-400 font-semibold"
+                elif rem_pct <= 20:
+                    status_label = "Warning"
+                    status_style = "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                    pct_style = "text-amber-500 font-bold"
+                else:
+                    status_label = "Active"
+                    status_style = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                    pct_style = "text-emerald-400 font-semibold"
+
+                time_left, exact_reset_str, exact_reset_iso = "-", "N/A", "N/A"
+                if reset_raw:
+                    try:
+                        exact_reset_iso = reset_raw
+                        utc_date = dateutil.parser.isoparse(reset_raw).replace(tzinfo=timezone.utc)
+                        exact_reset_str = utc_date.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %I:%M:%S %p")
+                        diff = utc_date - datetime.now(timezone.utc)
+                        if diff.total_seconds() > 0:
+                            h, rem = divmod(int(diff.total_seconds()), 3600)
+                            m, _ = divmod(rem, 60)
+                            time_left = f"{h}h {m}m"
+                        else:
+                            time_left = "Refreshed"
+                    except Exception:
+                        pass
+
+                models.append({
+                    "name": display_name,
+                    "usage": f"{used_pct}% Used",
+                    "used_pct_raw": used_pct,
+                    "pct": f"{rem_pct}%",
+                    "style": pct_style,
+                    "status_label": status_label,
+                    "status_style": status_style,
+                    "exact_reset": exact_reset_str,
+                    "exact_reset_iso": exact_reset_iso,
+                    "reset_left": time_left,
+                    "is_overaged": is_overaged,
+                })
+                total_rem_pct += rem_pct
+                model_count += 1
+
+            models.sort(key=lambda x: x["name"])
+            avg_used = 100 - (int(total_rem_pct / model_count) if model_count > 0 else 0)
+
+            accounts.append({
+                "pid": None,
+                "email": email,
+                "plan": f"Gemini API — Project: {project_id}" if project_id else "Gemini API",
+                "avg_used": avg_used,
+                "provider": "Gemini",
+                "models": models,
+                "gemini_meta": {
+                    "project_id": project_id,
+                    "last_updated": last_updated_str,
+                    "total_models": model_count,
+                    "overaged_models": sum(1 for m in models if m.get("is_overaged")),
+                },
+            })
+        except Exception as e:
+            print(f"[gemini] Failed to read {json_file}: {e}")
+            continue
+
+    accounts.sort(key=lambda x: x["email"].lower())
+    return accounts
+
+
+# ─────────────────────────────────────────────
 # HTTP server
 # ─────────────────────────────────────────────
 
@@ -580,10 +799,26 @@ class DashboardAPIHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/data":
             data = scrape_metrics()
+            save_profiles_to_cache(data)
+            cached = get_cached_profiles()
+
+            merged = {}
+            for item in cached:
+                merged[(item["email"], item["provider"])] = item
+            for item in data:
+                merged[(item["email"], item["provider"])] = item
+            combined = list(merged.values())
+
             codex_entry = scrape_codex_logs()
             if codex_entry:
-                data.append(codex_entry)
-            self._json(data)
+                combined.append(codex_entry)
+
+            # Add Gemini cockpit accounts
+            gemini_accounts = scrape_gemini_cockpit()
+            for acc in gemini_accounts:
+                combined.append(acc)
+
+            self._json(combined)
 
         elif path == "/api/history":
             self._json(get_history())
@@ -631,6 +866,31 @@ class DashboardAPIHandler(http.server.BaseHTTPRequestHandler):
                 import traceback
                 traceback.print_exc()
                 self._json({"status": "error", "message": "Internal Server Error"}, status=500)
+        elif parsed.path == "/api/terminate":
+            pid_str = params.get("pid", [None])[0]
+            if not pid_str:
+                self._json({"status": "error", "message": "Missing pid"}, status=400)
+                return
+            try:
+                pid = int(pid_str)
+                proc = psutil.Process(pid)
+                proc.terminate()
+                self._json({"status": "success", "pid": pid})
+            except psutil.NoSuchProcess:
+                self._json({"status": "error", "message": "Process not found"}, status=404)
+            except Exception as e:
+                self._json({"status": "error", "message": str(e)}, status=500)
+        elif parsed.path == "/api/remove_profile":
+            email = params.get("email", [None])[0]
+            provider = params.get("provider", [None])[0]
+            if not email or not provider:
+                self._json({"status": "error", "message": "Missing email or provider"}, status=400)
+                return
+            try:
+                delete_profile_from_cache(email, provider)
+                self._json({"status": "success", "email": email, "provider": provider})
+            except Exception as e:
+                self._json({"status": "error", "message": str(e)}, status=500)
         else:
             self.send_response(404)
             self.end_headers()

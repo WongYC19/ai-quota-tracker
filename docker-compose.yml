@@ -1,15 +1,43 @@
 services:
 
-  antigravity:
+  ai-quota-tracker:
     build: .
-    container_name: antigravity-tracker
-    command: python antigravity.py
+    container_name: ai-quota-tracker
+    restart: unless-stopped
     ports:
       - "5000:5000"
 
-  codex:
-    build: .
-    container_name: codex-tracker
-    command: python codex.py
-    ports:
-      - "5001:5001"
+    # ── Volume mounts ─────────────────────────────────────────
+    # The orchestrator reads data from the host's user profile directories.
+    # Adjust the left-hand paths to match your OS user home directory.
+    volumes:
+      # Database — persist SQLite history between restarts
+      - ./tracker_history.db:/app/tracker_history.db
+
+      # Codex sessions logs (~/.codex/sessions)
+      - type: bind
+        source: ${USERPROFILE:-~}/.codex/sessions
+        target: /root/.codex/sessions
+        read_only: true
+
+      # Gemini cockpit quota cache (~/.antigravity_cockpit)
+      - type: bind
+        source: ${USERPROFILE:-~}/.antigravity_cockpit
+        target: /root/.antigravity_cockpit
+        read_only: true
+
+      # Antigravity IDE profile directories (for LSP socket access)
+      # NOTE: process inspection (psutil) requires --pid-namespace=host or running outside Docker.
+      # The Codex log + Gemini cockpit features work fully inside Docker;
+      # live Antigravity LSP scraping requires the host network + process namespace.
+      - type: bind
+        source: ${USERPROFILE:-~}/AppData/Local
+        target: /root/AppData/Local
+        read_only: true
+
+    # Host networking gives psutil visibility into host processes (Antigravity LSP)
+    # Comment this out if you only want Codex + Gemini tracking.
+    network_mode: host
+
+    environment:
+      - USERPROFILE=/root

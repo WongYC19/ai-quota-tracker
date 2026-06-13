@@ -205,6 +205,7 @@
     let providers = [];       // seeded from /api/providers before first data fetch
     let activeProvider = null;
     let openAccounts = new Set();
+    let autoOpenedProviders = new Set();
 
     const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kuala_Lumpur';
     let userTimezone = detectedTz;
@@ -350,7 +351,8 @@
 
             // Sync Add Profile button visibility with current provider
             const launchBtn = document.getElementById('launch-btn');
-            if (launchBtn) launchBtn.style.display = (activeProvider === 'Codex') ? 'none' : 'flex';
+            const noLaunchProviders = ['Codex', 'Gemini'];
+            if (launchBtn) launchBtn.style.display = noLaunchProviders.includes(activeProvider) ? 'none' : 'flex';
 
             renderAll();
         } catch(e) {
@@ -363,7 +365,7 @@
     // ─────────────────────────────────────────────
     function buildProviderNav() {
         const nav = document.getElementById('provider-nav');
-        const ICONS = { Antigravity: 'ph-atom', Codex: 'ph-code', Unknown: 'ph-question' };
+        const ICONS = { Antigravity: 'ph-atom', Codex: 'ph-code', Gemini: 'ph-google-logo', Unknown: 'ph-question' };
 
         nav.innerHTML = providers.map(p => {
             const count = allData.filter(a => a.provider === p).length;
@@ -387,7 +389,8 @@
         renderAll();
         // Show/hide Add Profile button depending on provider
         const btn = document.getElementById('launch-btn');
-        if (btn) btn.style.display = (p === 'Codex') ? 'none' : 'flex';
+        const noLaunchProviders = ['Codex', 'Gemini'];
+        if (btn) btn.style.display = noLaunchProviders.includes(p) ? 'none' : 'flex';
     }
 
     // ─────────────────────────────────────────────
@@ -396,6 +399,36 @@
     async function launchProfile() {
         await fetch(`/api/launch?provider=${encodeURIComponent(activeProvider || 'Antigravity')}`, { method: 'POST' });
         setTimeout(fetchAll, 1200);
+    }
+
+    async function terminateSession(pid) {
+        if (!confirm(`Are you sure you want to terminate session with PID ${pid}?`)) return;
+        try {
+            const res = await fetch(`/api/terminate?pid=${pid}`, { method: 'POST' });
+            if (res.ok) {
+                setTimeout(fetchAll, 600);
+            } else {
+                const err = await res.json();
+                alert(`Failed to terminate: ${err.message || 'Unknown error'}`);
+            }
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
+    }
+
+    async function removeProfile(email, provider) {
+        if (!confirm(`Remove profile for ${email} (${provider}) from cache?`)) return;
+        try {
+            const res = await fetch(`/api/remove_profile?email=${encodeURIComponent(email)}&provider=${encodeURIComponent(provider)}`, { method: 'POST' });
+            if (res.ok) {
+                setTimeout(fetchAll, 300);
+            } else {
+                const err = await res.json();
+                alert(`Failed to remove: ${err.message || 'Unknown error'}`);
+            }
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
     }
 
     // ─────────────────────────────────────────────
@@ -423,7 +456,8 @@
         if (n.includes('claude')) return 'ph-brain';
         if (n.includes('gemini')) return 'ph-sparkle';
         if (n.includes('gpt')) return 'ph-lightning';
-        if (n.includes('o1') || n.includes('o3')) return 'ph-circle-dashed';
+        if (n.includes('o1') || n.includes('o3') || n.includes('o4')) return 'ph-circle-dashed';
+        if (n.includes('codex')) return 'ph-code';
         return 'ph-robot';
     }
 
@@ -648,14 +682,15 @@
             return;
         }
 
-        // Auto-open first account if nothing is open yet
-        if (openAccounts.size === 0 && data.length > 0) {
-            const id = data[0].email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + data[0].pid;
-            openAccounts.add(id);
+        // Auto-open first account if we haven't done so yet for this provider
+        const firstId = data[0] ? (data[0].email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + (data[0].pid || 'offline')) : null;
+        if (firstId && !autoOpenedProviders.has(activeProvider)) {
+            openAccounts.add(firstId);
+            autoOpenedProviders.add(activeProvider);
         }
 
         container.innerHTML = data.map(acc => {
-            const id = acc.email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + acc.pid;
+            const id = acc.email.replace(/[^a-zA-Z0-9]/g, '_') + '_' + (acc.pid || 'offline');
             const isOpen = openAccounts.has(id);
             const barColor = acc.avg_used > 80 ? 'bg-rose-500' : (acc.avg_used > 50 ? 'bg-amber-500' : 'bg-emerald-500');
 
@@ -686,15 +721,17 @@
                     <td class="px-5 py-3 font-mono text-slate-500 text-xs">${m.exact_reset_iso ? formatResetTime(m.exact_reset_iso) : m.exact_reset}</td>
                     <td class="px-5 py-3 font-mono text-slate-400 text-xs">
                         <span class="flex items-center space-x-1"><i class="ph ph-timer"></i><span>${m.reset_left}</span></span>
-                    </td>
+                      </td>
                     <td class="px-5 py-3 text-right">
                         <span class="px-2 py-0.5 text-[9px] font-bold rounded uppercase tracking-wider ${m.status_style}">${m.status_label}</span>
                     </td>
                 </tr>`).join('');
             }
 
+            const isOffline = !acc.pid;
+
             return `
-            <div class="glass rounded-xl overflow-hidden shadow-lg">
+            <div class="glass rounded-xl overflow-hidden shadow-lg ${isOffline ? 'opacity-70 hover:opacity-100 transition-opacity duration-200' : ''}">
                 <div class="px-5 py-3.5 flex justify-between items-center cursor-pointer select-none hover:bg-white/[0.03] transition"
                     onclick="toggleAccount('${id}')">
                     <div class="flex items-center space-x-3 min-w-0">
@@ -703,18 +740,40 @@
                             <div class="flex items-center space-x-2 flex-wrap gap-y-1">
                                 <span class="font-bold text-sm text-white truncate">${acc.email}</span>
                                 <span class="bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[9px] px-2 py-0.5 rounded font-bold uppercase tracking-wider shrink-0">${acc.plan}</span>
+                                ${!isOffline ? `
                                 <span class="flex items-center space-x-1 text-emerald-400 text-[9px] bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 shrink-0">
                                     <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0"></span>
                                     <span>PID ${acc.pid}</span>
                                 </span>
+                                ` : `
+                                <span class="flex items-center space-x-1 text-slate-400 text-[9px] bg-slate-800 px-2 py-0.5 rounded border border-slate-700 shrink-0">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+                                    <span>Offline</span>
+                                </span>
+                                `}
                             </div>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-3 shrink-0 ml-4">
-                        <span class="text-xs font-mono text-slate-500">${acc.avg_used}% used</span>
-                        <div class="w-20 bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div class="${barColor} h-full bar-glow" style="width:${acc.avg_used}%"></div>
+                    <div class="flex items-center space-x-4 shrink-0 ml-4">
+                        <div class="flex items-center space-x-2">
+                            <span class="text-xs font-mono text-slate-500">${acc.avg_used}% used</span>
+                            <div class="w-20 bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                                <div class="${barColor} h-full bar-glow" style="width:${acc.avg_used}%"></div>
+                            </div>
                         </div>
+                        ${!isOffline ? `
+                        <button onclick="event.stopPropagation(); terminateSession(${acc.pid})" 
+                            title="Cancel Session / Terminate Process"
+                            class="p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition">
+                            <i class="ph ph-power text-sm"></i>
+                        </button>
+                        ` : `
+                        <button onclick="event.stopPropagation(); removeProfile('${acc.email}', '${acc.provider}')" 
+                            title="Remove Profile / Delete Cache"
+                            class="p-1.5 rounded-lg hover:bg-slate-700/50 text-slate-400 hover:text-white transition">
+                            <i class="ph ph-trash text-sm"></i>
+                        </button>
+                        `}
                     </div>
                 </div>
                 <div class="${isOpen ? '' : 'hidden'} border-t border-border/50" style="background:rgba(0,0,0,0.25);">
@@ -731,6 +790,16 @@
                         </thead>
                         <tbody>${rowsHtml}</tbody>
                     </table>
+                    ${acc.gemini_meta ? `
+                    <div class="px-5 py-2.5 flex items-center justify-between border-t border-border/50" style="background:rgba(0,0,0,0.3)">
+                        <div class="flex items-center space-x-3 text-[10px] text-slate-600">
+                            <span class="flex items-center space-x-1"><i class="ph ph-folder text-blue-500/60"></i><span class="text-slate-500">${acc.gemini_meta.project_id}</span></span>
+                            <span>${acc.gemini_meta.total_models} models</span>
+                            ${acc.gemini_meta.overaged_models > 0 ? `<span class="text-rose-400 font-bold">${acc.gemini_meta.overaged_models} overaged</span>` : ''}
+                        </div>
+                        <span class="text-[10px] text-slate-600 font-mono">Cache: ${acc.gemini_meta.last_updated}</span>
+                    </div>
+                    ` : ''}
                 </div>
             </div>`;
         }).join('');
@@ -762,7 +831,10 @@
                 <div class="w-7 h-7 rounded-full bg-slate-800 flex items-center justify-center shrink-0">
                     <i class="ph ${modelIcon(m.name)} text-indigo-400 text-sm"></i>
                 </div>
-                <span class="text-slate-300 text-xs font-medium truncate">${m.name}</span>
+                <div class="min-w-0 flex flex-col">
+                    <span class="text-slate-300 text-xs font-medium truncate">${m.name}</span>
+                    <span class="text-[10px] text-slate-500 truncate">${m.account}</span>
+                </div>
             </div>
             <span class="text-indigo-400 font-mono text-[10px] bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 rounded shrink-0 ml-2">in ${m.reset_left}</span>
         </div>`).join('');
